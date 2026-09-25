@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: consultcrm
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: "cd client && npm install && npm run build && cd ../server && npm install"
+    startCommand: "node server/server.js"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: consultcrm-uploads
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: CLIENT_URL
+        value: ""
+      - key: SEED_ADMIN_NAME
+        sync: false
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
