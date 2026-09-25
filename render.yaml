@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: consultcrm
+    name: bespreekonline
     runtime: node
     plan: starter
     region: frankfurt
@@ -9,7 +9,7 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
     disk:
-      name: consultcrm-uploads
+      name: bespreekonline-uploads
       mountPath: /var/data
       sizeGB: 1
     envVars:
