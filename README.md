@@ -1,4 +1,4 @@
-# Consult CRM
+# bespreekOnline
 
 A CRM built for a school & school-pool advisory consultancy: clients (schools /
 school pools), assignments with variable billing rates, document & bill
@@ -9,7 +9,7 @@ MongoDB, and designed to deploy to Render as a single web service.
 ## How it's organized
 
 ```
-consultcrm/
+bespreekOnline/
   server/      Express API + serves the built React app in production
     models/    Mongoose schemas: User, Client, Assignment, TimeEntry, Document
     routes/    REST endpoints
