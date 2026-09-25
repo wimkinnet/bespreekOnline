@@ -77,7 +77,10 @@ export default function Assignments() {
                   <td>
                     <strong>{a.title}</strong>
                   </td>
-                  <td>{a.client?.name}</td>
+                  <td>
+                    {a.client?.name}
+                    {a.client?.type === 'school_pool' && <span className="muted"> (school group)</span>}
+                  </td>
                   <td>{billingTypeLabel(a.billingType)}</td>
                   <td>
                     €{a.rate}

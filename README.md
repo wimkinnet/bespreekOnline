@@ -58,7 +58,7 @@ managed MongoDB.
    # and set SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD to your own login
    npm install
    npm run seed     # creates your first admin account, run once
-   npm run dev       # starts the API on http://localhost:5000
+   npm run dev       # starts the API on http://localhost:5001
    ```
 
 2. **Frontend** (in a second terminal)
@@ -66,7 +66,7 @@ managed MongoDB.
    ```bash
    cd client
    npm install
-   npm run dev       # starts on http://localhost:5173, proxies /api to :5000
+   npm run dev       # starts on http://localhost:5173, proxies /api to :5001
    ```
 
 3. Open `http://localhost:5173` and log in with the admin email/password you

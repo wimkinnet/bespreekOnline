@@ -21,6 +21,10 @@ export default function ClientDetail() {
 
   const [client, setClient] = useState(null);
   const [assignments, setAssignments] = useState([]);
+  const [groupAssignments, setGroupAssignments] = useState([]);
+  const [schools, setSchools] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [groupError, setGroupError] = useState('');
   const [documents, setDocuments] = useState([]);
   const [tab, setTab] = useState('assignments');
   const [loading, setLoading] = useState(true);
@@ -41,6 +45,8 @@ export default function ClientDetail() {
     const { data } = await api.get(`/clients/${id}`);
     setClient(data.client);
     setAssignments(data.assignments);
+    setGroupAssignments(data.groupAssignments);
+    setSchools(data.schools);
     const docsRes = await api.get('/documents', { params: { client: id } });
     setDocuments(docsRes.data);
     setLoading(false);
@@ -50,6 +56,21 @@ export default function ClientDetail() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (user.role !== 'admin') return;
+    api.get('/clients', { params: { type: 'school_pool' } }).then(({ data }) => setGroups(data));
+  }, [user.role]);
+
+  async function handleChangeGroup(parentPool) {
+    setGroupError('');
+    try {
+      await api.put(`/clients/${id}`, { parentPool: parentPool || null });
+      load();
+    } catch (err) {
+      setGroupError(err.response?.data?.message || 'Could not change school group.');
+    }
+  }
 
   async function handleCreateAssignment(e) {
     e.preventDefault();
@@ -124,7 +145,13 @@ export default function ClientDetail() {
         <div>
           <h1>{client.name}</h1>
           <p>
-            {client.type === 'school_pool' ? 'School pool' : 'School'}
+            {client.type === 'school_pool' ? 'School group' : 'School'}
+            {client.parentPool && (
+              <>
+                {' · part of '}
+                <Link to={`/clients/${client.parentPool._id}`}>{client.parentPool.name}</Link>
+              </>
+            )}
             {client.address?.city ? ` · ${client.address.city}` : ''}
           </p>
         </div>
@@ -154,6 +181,22 @@ export default function ClientDetail() {
             </p>
           </div>
         </div>
+        {client.type === 'school' && user.role === 'admin' && (
+          <>
+            <div className="muted" style={{ fontSize: 12, margin: '14px 0 4px' }}>
+              SCHOOL GROUP
+            </div>
+            {groupError && <div className="error-banner">{groupError}</div>}
+            <select value={client.parentPool?._id || ''} onChange={(e) => handleChangeGroup(e.target.value)}>
+              <option value="">Independent school</option>
+              {groups.map((g) => (
+                <option key={g._id} value={g._id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         {client.notes && (
           <>
             <div className="muted" style={{ fontSize: 12, margin: '14px 0 4px' }}>
@@ -171,7 +214,43 @@ export default function ClientDetail() {
         <div className={`tab ${tab === 'documents' ? 'active' : ''}`} onClick={() => setTab('documents')}>
           Documents & bills ({documents.length})
         </div>
+        {client.type === 'school_pool' && (
+          <div className={`tab ${tab === 'schools' ? 'active' : ''}`} onClick={() => setTab('schools')}>
+            Schools ({schools.length})
+          </div>
+        )}
       </div>
+
+      {tab === 'schools' && (
+        <div className="table-wrap">
+          {schools.length === 0 ? (
+            <div className="empty-state">No schools linked to this group yet.</div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>City</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schools.map((s) => (
+                  <tr key={s._id} className="clickable" onClick={() => navigate(`/clients/${s._id}`)}>
+                    <td>
+                      <strong>{s.name}</strong>
+                    </td>
+                    <td>{s.address?.city || '—'}</td>
+                    <td>
+                      <span className={`badge status-${s.status}`}>{s.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {tab === 'assignments' && (
         <div>
@@ -215,6 +294,35 @@ export default function ClientDetail() {
               </table>
             )}
           </div>
+          {groupAssignments.length > 0 && (
+            <>
+              <h3 style={{ marginTop: 20 }}>Via school group {client.parentPool.name}</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Billing</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupAssignments.map((a) => (
+                      <tr key={a._id} className="clickable" onClick={() => navigate(`/assignments/${a._id}`)}>
+                        <td>
+                          <strong>{a.title}</strong>
+                        </td>
+                        <td>{billingTypeLabel(a.billingType)}</td>
+                        <td>
+                          <span className={`badge status-${a.status}`}>{statusLabel(a.status)}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 

@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 const emptyForm = {
   name: '',
   type: 'school',
+  parentPool: '',
   contactName: '',
   contactEmail: '',
   contactPhone: '',
@@ -21,6 +22,7 @@ export default function Clients() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -39,6 +41,10 @@ export default function Clients() {
   }
 
   useEffect(() => {
+    api.get('/clients', { params: { type: 'school_pool' } }).then(({ data }) => setGroups(data));
+  }, []);
+
+  useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -52,6 +58,7 @@ export default function Clients() {
       await api.post('/clients', {
         name: form.name,
         type: form.type,
+        parentPool: form.type === 'school' ? form.parentPool || null : null,
         status: form.status,
         contactName: form.contactName,
         contactEmail: form.contactEmail,
@@ -63,6 +70,9 @@ export default function Clients() {
       setShowForm(false);
       setForm(emptyForm);
       load();
+      if (form.type === 'school_pool') {
+        api.get('/clients', { params: { type: 'school_pool' } }).then(({ data }) => setGroups(data));
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Could not create client.');
     } finally {
@@ -75,7 +85,7 @@ export default function Clients() {
       <div className="page-header">
         <div>
           <h1>Clients</h1>
-          <p>Schools and school pools you advise.</p>
+          <p>Schools and school groups you advise.</p>
         </div>
         {user.role === 'admin' && (
           <button className="btn btn-primary" onClick={() => setShowForm(true)}>
@@ -98,7 +108,7 @@ export default function Clients() {
         >
           <option value="">All types</option>
           <option value="school">School</option>
-          <option value="school_pool">School pool</option>
+          <option value="school_pool">School group</option>
         </select>
       </div>
 
@@ -115,6 +125,7 @@ export default function Clients() {
               <tr>
                 <th>Name</th>
                 <th>Type</th>
+                <th>School group</th>
                 <th>City</th>
                 <th>Contact</th>
                 <th>Status</th>
@@ -126,7 +137,8 @@ export default function Clients() {
                   <td>
                     <strong>{c.name}</strong>
                   </td>
-                  <td>{c.type === 'school_pool' ? 'School pool' : 'School'}</td>
+                  <td>{c.type === 'school_pool' ? 'School group' : 'School'}</td>
+                  <td>{c.parentPool?.name || '—'}</td>
                   <td>{c.address?.city || '—'}</td>
                   <td>{c.contactName || '—'}</td>
                   <td>
@@ -163,7 +175,7 @@ export default function Clients() {
                   <label>Type</label>
                   <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
                     <option value="school">School</option>
-                    <option value="school_pool">School pool</option>
+                    <option value="school_pool">School group</option>
                   </select>
                 </div>
                 <div className="field">
@@ -175,6 +187,19 @@ export default function Clients() {
                   </select>
                 </div>
               </div>
+              {form.type === 'school' && (
+                <div className="field">
+                  <label>School group (optional)</label>
+                  <select value={form.parentPool} onChange={(e) => setForm({ ...form, parentPool: e.target.value })}>
+                    <option value="">Independent school</option>
+                    {groups.map((g) => (
+                      <option key={g._id} value={g._id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="field-row">
                 <div className="field">
                   <label>Contact name</label>

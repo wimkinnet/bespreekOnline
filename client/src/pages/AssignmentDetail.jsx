@@ -77,6 +77,7 @@ export default function AssignmentDetail() {
         <div>
           <h1>{assignment.title}</h1>
           <p>
+            {assignment.client.type === 'school_pool' && 'School group · '}
             <Link to={`/clients/${assignment.client._id}`}>{assignment.client.name}</Link>
           </p>
         </div>
