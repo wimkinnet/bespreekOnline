@@ -14,8 +14,8 @@ export default function Layout() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          Consult CRM
-          <span>School &amp; school-pool advisory</span>
+          bespreek
+          <span>School &amp; Scholen Groep advies</span>
         </div>
 
         <nav>
