@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import ClientForm, { clientToForm } from '../components/ClientForm';
 import { formatDate, billingTypeLabel, statusLabel, clientTypeLabel, rateUnitLabel } from '../utils/format';
 
 const emptyAssignment = {
@@ -25,6 +26,9 @@ export default function ClientDetail() {
   const [schools, setSchools] = useState([]);
   const [groups, setGroups] = useState([]);
   const [groupError, setGroupError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [savingClient, setSavingClient] = useState(false);
+  const [clientError, setClientError] = useState('');
   const [documents, setDocuments] = useState([]);
   const [tab, setTab] = useState('assignments');
   const [loading, setLoading] = useState(true);
@@ -69,6 +73,20 @@ export default function ClientDetail() {
       load();
     } catch (err) {
       setGroupError(err.response?.data?.message || 'Could not change school group.');
+    }
+  }
+
+  async function handleUpdateClient(payload) {
+    setSavingClient(true);
+    setClientError('');
+    try {
+      await api.put(`/clients/${id}`, payload);
+      setEditing(false);
+      load();
+    } catch (err) {
+      setClientError(err.response?.data?.message || 'Could not update client.');
+    } finally {
+      setSavingClient(false);
     }
   }
 
@@ -155,8 +173,43 @@ export default function ClientDetail() {
             {client.address?.city ? ` · ${client.address.city}` : ''}
           </p>
         </div>
-        <span className={`badge status-${client.status}`}>{client.status}</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className={`badge status-${client.status}`}>{client.status}</span>
+          {user.role === 'admin' && (
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                setClientError('');
+                setEditing(true);
+              }}
+            >
+              Edit
+            </button>
+          )}
+        </div>
       </div>
+
+      {editing && (
+        <div className="modal-backdrop" onClick={() => setEditing(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Edit client</h2>
+              <button className="btn btn-sm" onClick={() => setEditing(false)}>
+                Close
+              </button>
+            </div>
+            {clientError && <div className="error-banner">{clientError}</div>}
+            <ClientForm
+              initial={clientToForm(client)}
+              groups={groups}
+              excludeId={client._id}
+              onSubmit={handleUpdateClient}
+              saving={savingClient}
+              submitLabel="Save changes"
+            />
+          </div>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 18 }}>
         <div className="field-row">
