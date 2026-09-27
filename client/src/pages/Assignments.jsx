@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
-import { billingTypeLabel, statusLabel } from '../utils/format';
+import { billingTypeLabel, statusLabel, rateUnitLabel } from '../utils/format';
 
 export default function Assignments() {
   const navigate = useNavigate();
@@ -84,7 +84,7 @@ export default function Assignments() {
                   <td>{billingTypeLabel(a.billingType)}</td>
                   <td>
                     €{a.rate}
-                    {a.billingType !== 'fixed' ? ` / ${a.billingType === 'hourly' ? 'h' : 'day'}` : ''}
+                    {a.billingType !== 'fixed' ? ` / ${rateUnitLabel(a.billingType, true)}` : ''}
                   </td>
                   <td>{a.consultants?.map((c) => c.name).join(', ') || '—'}</td>
                   <td>

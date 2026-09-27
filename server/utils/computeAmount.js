@@ -14,6 +14,10 @@ function computeAmount(assignment, { hours, days }) {
     const d = Number(days) || 0;
     return { amount: Math.round(d * rateApplied * 100) / 100, rateApplied, billingType };
   }
+  if (billingType === 'half_day') {
+    const halfDays = (Number(days) || 0) * 2;
+    return { amount: Math.round(halfDays * rateApplied * 100) / 100, rateApplied, billingType };
+  }
   // fixed
   return { amount: 0, rateApplied, billingType };
 }

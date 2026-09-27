@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import { formatEUR, formatDate, billingTypeLabel } from '../utils/format';
+import { formatEUR, formatDate, billingTypeLabel, rateUnitLabel } from '../utils/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -54,7 +54,7 @@ export default function TimeRegistration() {
         billable: form.billable,
       };
       if (selectedAssignment.billingType === 'hourly') payload.hours = Number(form.amountValue);
-      if (selectedAssignment.billingType === 'daily') payload.days = Number(form.amountValue);
+      if (['daily', 'half_day'].includes(selectedAssignment.billingType)) payload.days = Number(form.amountValue);
       // Fixed-fee assignments still track days worked internally for visibility
       if (selectedAssignment.billingType === 'fixed') payload.days = Number(form.amountValue) || undefined;
 
@@ -129,6 +129,8 @@ export default function TimeRegistration() {
                       ? 'Hours worked'
                       : selectedAssignment.billingType === 'daily'
                       ? 'Days worked'
+                      : selectedAssignment.billingType === 'half_day'
+                      ? 'Days worked (0.5 = one half day)'
                       : 'Days worked (for tracking, not billed separately)'}
                   </label>
                   <input
@@ -147,9 +149,7 @@ export default function TimeRegistration() {
                     value={
                       selectedAssignment.billingType === 'fixed'
                         ? `${formatEUR(selectedAssignment.rate)} total, fixed fee`
-                        : `${formatEUR(selectedAssignment.rate)} / ${
-                            selectedAssignment.billingType === 'hourly' ? 'hour' : 'day'
-                          }`
+                        : `${formatEUR(selectedAssignment.rate)} / ${rateUnitLabel(selectedAssignment.billingType)}`
                     }
                   />
                 </div>

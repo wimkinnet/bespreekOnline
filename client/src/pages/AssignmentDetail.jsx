@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import { formatEUR, formatDate, billingTypeLabel, statusLabel } from '../utils/format';
+import { formatEUR, formatDate, billingTypeLabel, statusLabel, rateUnitLabel } from '../utils/format';
 
 export default function AssignmentDetail() {
   const { id } = useParams();
@@ -104,7 +104,7 @@ export default function AssignmentDetail() {
           <div className="label">Rate</div>
           <div className="value" style={{ fontSize: 18 }}>
             {formatEUR(assignment.rate)}
-            {assignment.billingType !== 'fixed' ? ` / ${assignment.billingType === 'hourly' ? 'h' : 'd'}` : ''}
+            {assignment.billingType !== 'fixed' ? ` / ${rateUnitLabel(assignment.billingType, true)}` : ''}
           </div>
         </div>
         <div className="stat">
@@ -112,7 +112,7 @@ export default function AssignmentDetail() {
           <div className="value" style={{ fontSize: 18 }}>
             {assignment.billingType === 'hourly'
               ? `${totals.hours.toFixed(1)} h`
-              : assignment.billingType === 'daily'
+              : ['daily', 'half_day'].includes(assignment.billingType)
               ? `${totals.days.toFixed(1)} d`
               : `${timeEntries.length} entries`}
           </div>
@@ -136,6 +136,7 @@ export default function AssignmentDetail() {
                 <select value={form.billingType} onChange={(e) => setForm({ ...form, billingType: e.target.value })}>
                   <option value="hourly">Per hour</option>
                   <option value="daily">Per day</option>
+                  <option value="half_day">Per half day</option>
                   <option value="fixed">Fixed fee</option>
                 </select>
               </div>

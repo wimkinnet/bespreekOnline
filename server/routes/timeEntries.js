@@ -61,8 +61,11 @@ router.post('/', async (req, res) => {
     if (assignment.billingType === 'hourly' && !hours) {
       return res.status(400).json({ message: 'This assignment is billed hourly - enter hours.' });
     }
-    if (assignment.billingType === 'daily' && !days) {
-      return res.status(400).json({ message: 'This assignment is billed daily - enter days.' });
+    if (['daily', 'half_day'].includes(assignment.billingType) && !days) {
+      return res.status(400).json({ message: 'This assignment is billed per (half) day - enter days.' });
+    }
+    if (assignment.billingType === 'half_day' && (days * 2) % 1 !== 0) {
+      return res.status(400).json({ message: 'This assignment is billed per half day - enter days in steps of 0.5.' });
     }
 
     const { amount, rateApplied, billingType } = computeAmount(assignment, { hours, days });
@@ -73,7 +76,7 @@ router.post('/', async (req, res) => {
       client: assignment.client,
       date,
       hours: billingType === 'hourly' ? hours : undefined,
-      days: billingType === 'daily' ? days : undefined,
+      days: ['daily', 'half_day'].includes(billingType) ? days : undefined,
       description,
       billable: billable !== undefined ? billable : true,
       billingType,
@@ -115,7 +118,7 @@ router.put('/:id', async (req, res) => {
     if (hours !== undefined || days !== undefined) {
       const { amount, rateApplied, billingType } = computeAmount(entry.assignment, { hours, days });
       entry.hours = billingType === 'hourly' ? hours : undefined;
-      entry.days = billingType === 'daily' ? days : undefined;
+      entry.days = ['daily', 'half_day'].includes(billingType) ? days : undefined;
       entry.amount = amount;
       entry.rateApplied = rateApplied;
     }

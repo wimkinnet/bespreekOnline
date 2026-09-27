@@ -10,7 +10,15 @@ export function formatDate(dateStr) {
 }
 
 export function billingTypeLabel(type) {
-  return { hourly: 'Per hour', daily: 'Per day', fixed: 'Fixed fee' }[type] || type;
+  return { hourly: 'Per hour', daily: 'Per day', half_day: 'Per half day', fixed: 'Fixed fee' }[type] || type;
+}
+
+// Unit the rate is expressed in, e.g. "€80 / h"; empty for fixed fees
+export function rateUnitLabel(type, short = false) {
+  if (type === 'hourly') return short ? 'h' : 'hour';
+  if (type === 'daily') return 'day';
+  if (type === 'half_day') return 'half day';
+  return '';
 }
 
 export function statusLabel(status) {

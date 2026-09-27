@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import { formatDate, billingTypeLabel, statusLabel, clientTypeLabel } from '../utils/format';
+import { formatDate, billingTypeLabel, statusLabel, clientTypeLabel, rateUnitLabel } from '../utils/format';
 
 const emptyAssignment = {
   title: '',
@@ -283,7 +283,7 @@ export default function ClientDetail() {
                       <td>{billingTypeLabel(a.billingType)}</td>
                       <td>
                         €{a.rate}
-                        {a.billingType !== 'fixed' ? ` / ${a.billingType === 'hourly' ? 'h' : 'day'}` : ''}
+                        {a.billingType !== 'fixed' ? ` / ${rateUnitLabel(a.billingType, true)}` : ''}
                       </td>
                       <td>
                         <span className={`badge status-${a.status}`}>{statusLabel(a.status)}</span>
@@ -436,6 +436,7 @@ export default function ClientDetail() {
                   >
                     <option value="hourly">Per hour</option>
                     <option value="daily">Per day</option>
+                    <option value="half_day">Per half day</option>
                     <option value="fixed">Fixed fee</option>
                   </select>
                 </div>
@@ -444,9 +445,7 @@ export default function ClientDetail() {
                     Rate (€
                     {assignmentForm.billingType === 'fixed'
                       ? ' total'
-                      : assignmentForm.billingType === 'daily'
-                      ? ' / day'
-                      : ' / hour'}
+                      : ` / ${rateUnitLabel(assignmentForm.billingType)}`}
                     )
                   </label>
                   <input

@@ -8,11 +8,11 @@ const timeEntrySchema = new mongoose.Schema(
     date: { type: Date, required: true },
     // Only one of these is used, matching the assignment's billingType at the time of entry
     hours: { type: Number, min: 0 }, // for hourly assignments
-    days: { type: Number, min: 0 }, // for daily assignments (supports 0.5 etc.)
+    days: { type: Number, min: 0 }, // for daily and half-day assignments (supports 0.5 etc.)
     description: { type: String, trim: true },
     billable: { type: Boolean, default: true },
     // Snapshot of the rate/type used, so historical entries stay correct if the assignment rate changes later
-    billingType: { type: String, enum: ['hourly', 'daily', 'fixed'], required: true },
+    billingType: { type: String, enum: ['hourly', 'daily', 'half_day', 'fixed'], required: true },
     rateApplied: { type: Number, required: true },
     amount: { type: Number, required: true }, // computed: hours*rate, days*rate, or 0 for fixed
     invoiced: { type: Boolean, default: false },
