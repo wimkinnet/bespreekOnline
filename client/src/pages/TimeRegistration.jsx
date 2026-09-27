@@ -115,10 +115,10 @@ export default function TimeRegistration() {
       }
       if (selectedAssignment.billingType === 'hourly') payload.hours = Number(form.amountValue);
       if (['daily', 'half_day'].includes(selectedAssignment.billingType)) payload.days = Number(form.amountValue);
-      // Fixed fees are billed by registering an amount; days worked are tracked for visibility only
+      // Fixed fees are billed by registering an amount; hours worked are tracked for visibility only
       if (selectedAssignment.billingType === 'fixed') {
         payload.feeAmount = Number(form.feeAmount);
-        payload.days = Number(form.amountValue) || undefined;
+        payload.hours = Number(form.amountValue) || undefined;
       }
 
       await api.post('/time-entries', payload);
@@ -196,12 +196,12 @@ export default function TimeRegistration() {
                       ? 'Days worked'
                       : selectedAssignment.billingType === 'half_day'
                       ? 'Days worked (0.5 = one half day)'
-                      : 'Days worked (optional, for tracking)'}
+                      : 'Hours worked (optional, for tracking)'}
                   </label>
                   <input
                     type="number"
                     min="0"
-                    step={selectedAssignment.billingType === 'hourly' ? '0.25' : '0.5'}
+                    step={['hourly', 'fixed'].includes(selectedAssignment.billingType) ? '0.25' : '0.5'}
                     required={selectedAssignment.billingType !== 'fixed'}
                     value={form.amountValue}
                     onChange={(e) => setForm({ ...form, amountValue: e.target.value })}

@@ -124,7 +124,7 @@ export default function AssignmentDetail() {
         <div className="stat">
           <div className="label">Logged</div>
           <div className="value" style={{ fontSize: 18 }}>
-            {assignment.billingType === 'hourly'
+            {['hourly', 'fixed'].includes(assignment.billingType)
               ? `${totals.hours.toFixed(1)} h`
               : ['daily', 'half_day'].includes(assignment.billingType)
               ? `${totals.days.toFixed(1)} d`

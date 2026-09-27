@@ -4,6 +4,8 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { formatEUR, formatDate } from '../utils/format';
 
+const HOURS_PER_DAY = 8;
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [clients, setClients] = useState([]);
@@ -21,7 +23,7 @@ export default function Dashboard() {
       ]);
       setClients(clientsRes.data);
       setAssignments(assignmentsRes.data);
-      setEntries(entriesRes.data.slice(0, 8));
+      setEntries(entriesRes.data);
       setLoading(false);
     }
     load();
@@ -32,7 +34,8 @@ export default function Dashboard() {
     const d = new Date(e.date);
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
-  const monthHours = monthEntries.reduce((s, e) => s + (e.hours || 0), 0);
+  // Hours from hourly and fixed-fee entries; day-based entries count as HOURS_PER_DAY per day
+  const monthHours = monthEntries.reduce((s, e) => s + (e.hours || 0) + (e.days || 0) * HOURS_PER_DAY, 0);
   const monthAmount = monthEntries.reduce((s, e) => s + (e.amount || 0), 0);
 
   if (loading) return <p className="muted">Loading…</p>;
@@ -86,7 +89,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {entries.map((e) => (
+              {entries.slice(0, 8).map((e) => (
                 <tr key={e._id}>
                   <td>{formatDate(e.date)}</td>
                   <td>{e.assignment?.title}</td>

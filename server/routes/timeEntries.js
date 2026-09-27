@@ -136,8 +136,9 @@ router.post('/', async (req, res) => {
       assignment: assignment._id,
       client: assignment.client,
       date,
-      hours: billingType === 'hourly' ? hours : undefined,
-      days: billingType === 'hourly' ? undefined : days || undefined,
+      // Fixed-fee entries track hours worked (optional) next to the billed amount
+      hours: ['hourly', 'fixed'].includes(billingType) ? hours || undefined : undefined,
+      days: ['daily', 'half_day'].includes(billingType) ? days : undefined,
       description,
       billable: billable !== undefined ? billable : true,
       billingType,
@@ -190,8 +191,10 @@ router.put('/:id', async (req, res) => {
         days: days !== undefined ? days : entry.days,
         feeAmount: fee,
       });
-      entry.hours = billingType === 'hourly' ? (hours !== undefined ? hours : entry.hours) : undefined;
-      entry.days = billingType === 'hourly' ? undefined : (days !== undefined ? days : entry.days) || undefined;
+      entry.hours = ['hourly', 'fixed'].includes(billingType)
+        ? (hours !== undefined ? hours : entry.hours) || undefined
+        : undefined;
+      entry.days = ['daily', 'half_day'].includes(billingType) ? (days !== undefined ? days : entry.days) : undefined;
       entry.amount = amount;
       entry.rateApplied = rateApplied;
     }

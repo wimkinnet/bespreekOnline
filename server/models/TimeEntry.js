@@ -7,7 +7,7 @@ const timeEntrySchema = new mongoose.Schema(
     client: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', required: true }, // denormalized for fast reporting
     date: { type: Date, required: true },
     // Only one of these is used, matching the assignment's billingType at the time of entry
-    hours: { type: Number, min: 0 }, // for hourly assignments
+    hours: { type: Number, min: 0 }, // for hourly assignments, optional on fixed-fee ones
     days: { type: Number, min: 0 }, // for daily and half-day assignments (supports 0.5 etc.)
     description: { type: String, trim: true },
     billable: { type: Boolean, default: true },
