@@ -6,6 +6,20 @@ import { formatEUR, formatDate, billingTypeLabel, rateUnitLabel } from '../utils
 const today = () => new Date().toISOString().slice(0, 10);
 const DEFAULT_TRAVEL_RATE = '0.45'; // EUR per km
 
+// Whether a date (YYYY-MM-DD) falls within an assignment's period; a missing start or end date is open-ended
+function inPeriod(assignment, date) {
+  const start = assignment.startDate?.slice(0, 10);
+  const end = assignment.endDate?.slice(0, 10);
+  return (!start || date >= start) && (!end || date <= end);
+}
+
+function periodLabel(assignment) {
+  if (!assignment.startDate && !assignment.endDate) return 'no period';
+  const start = assignment.startDate ? formatDate(assignment.startDate) : '…';
+  const end = assignment.endDate ? formatDate(assignment.endDate) : '…';
+  return `${start} – ${end}`;
+}
+
 // includeTravel starts unanswered (null) so the consultant has to choose yes or no for every entry
 const emptyEntry = (assignment = '') => ({
   assignment,
@@ -34,6 +48,8 @@ export default function TimeRegistration() {
   const [feeRemaining, setFeeRemaining] = useState(null); // part of a fixed fee not yet registered
 
   const selectedAssignment = assignments.find((a) => a._id === form.assignment);
+  const currentAssignments = assignments.filter((a) => inPeriod(a, form.date));
+  const otherAssignments = assignments.filter((a) => !inPeriod(a, form.date));
 
   async function load() {
     setLoading(true);
@@ -168,12 +184,28 @@ export default function TimeRegistration() {
                   }
                 >
                   <option value="">Select an assignment…</option>
-                  {assignments.map((a) => (
-                    <option key={a._id} value={a._id}>
-                      {a.client?.name} — {a.title} ({billingTypeLabel(a.billingType)})
-                    </option>
-                  ))}
+                  <optgroup label="Within the assignment period">
+                    {currentAssignments.map((a) => (
+                      <option key={a._id} value={a._id}>
+                        {a.client?.name} — {a.title} ({billingTypeLabel(a.billingType)})
+                      </option>
+                    ))}
+                  </optgroup>
+                  {otherAssignments.length > 0 && (
+                    <optgroup label="Outside the assignment period">
+                      {otherAssignments.map((a) => (
+                        <option key={a._id} value={a._id}>
+                          {a.client?.name} — {a.title} ({periodLabel(a)})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
+                {selectedAssignment && !inPeriod(selectedAssignment, form.date) && (
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    This date is outside the assignment period ({periodLabel(selectedAssignment)}).
+                  </div>
+                )}
               </div>
               <div className="field">
                 <label>Date</label>
