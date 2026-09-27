@@ -14,7 +14,7 @@ const timeEntrySchema = new mongoose.Schema(
     // Snapshot of the rate/type used, so historical entries stay correct if the assignment rate changes later
     billingType: { type: String, enum: ['hourly', 'daily', 'half_day', 'fixed'], required: true },
     rateApplied: { type: Number, required: true },
-    amount: { type: Number, required: true }, // computed: hours*rate, days*rate, or 0 for fixed
+    amount: { type: Number, required: true }, // computed: hours*rate, days*rate, or the registered part of a fixed fee
     // Travel costs, billed on top of the work amount (also for fixed-fee assignments)
     travelIncluded: { type: Boolean, default: false },
     travelKm: { type: Number, min: 0 }, // round trip, consultant's home -> client -> home

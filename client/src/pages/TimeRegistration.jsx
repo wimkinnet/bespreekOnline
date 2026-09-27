@@ -11,6 +11,7 @@ const emptyEntry = (assignment = '') => ({
   assignment,
   date: today(),
   amountValue: '',
+  feeAmount: '',
   description: '',
   billable: true,
   includeTravel: null,
@@ -30,6 +31,7 @@ export default function TimeRegistration() {
   const [travel, setTravel] = useState(null); // distance lookup result for the selected assignment
   const [travelError, setTravelError] = useState('');
   const [travelLoading, setTravelLoading] = useState(false);
+  const [feeRemaining, setFeeRemaining] = useState(null); // part of a fixed fee not yet registered
 
   const selectedAssignment = assignments.find((a) => a._id === form.assignment);
 
@@ -50,6 +52,23 @@ export default function TimeRegistration() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // For a fixed fee, suggest billing whatever part of the fee has not been registered yet
+  const fixedAssignmentId = selectedAssignment?.billingType === 'fixed' ? selectedAssignment._id : null;
+  useEffect(() => {
+    setFeeRemaining(null);
+    if (!fixedAssignmentId) return;
+    let cancelled = false;
+    api.get(`/assignments/${fixedAssignmentId}`).then(({ data }) => {
+      if (cancelled) return;
+      const remaining = Math.max(0, Math.round((data.assignment.rate - data.totals.amount) * 100) / 100);
+      setFeeRemaining(remaining);
+      setForm((f) => (f.feeAmount === '' ? { ...f, feeAmount: String(remaining) } : f));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fixedAssignmentId, entries]);
 
   // Look up the distance from the consultant's home to the client once travel costs are requested
   const clientId = selectedAssignment?.client?._id;
@@ -96,8 +115,11 @@ export default function TimeRegistration() {
       }
       if (selectedAssignment.billingType === 'hourly') payload.hours = Number(form.amountValue);
       if (['daily', 'half_day'].includes(selectedAssignment.billingType)) payload.days = Number(form.amountValue);
-      // Fixed-fee assignments still track days worked internally for visibility
-      if (selectedAssignment.billingType === 'fixed') payload.days = Number(form.amountValue) || undefined;
+      // Fixed fees are billed by registering an amount; days worked are tracked for visibility only
+      if (selectedAssignment.billingType === 'fixed') {
+        payload.feeAmount = Number(form.feeAmount);
+        payload.days = Number(form.amountValue) || undefined;
+      }
 
       await api.post('/time-entries', payload);
       setForm(emptyEntry(form.assignment));
@@ -122,7 +144,7 @@ export default function TimeRegistration() {
       <div className="page-header">
         <div>
           <h1>Time registration</h1>
-          <p>Log hours or days against an assignment. Rates are applied automatically.</p>
+          <p>Log hours, days or fixed-fee amounts against an assignment. Only registered entries count as income.</p>
         </div>
       </div>
 
@@ -141,7 +163,9 @@ export default function TimeRegistration() {
                 <select
                   required
                   value={form.assignment}
-                  onChange={(e) => setForm({ ...form, assignment: e.target.value, amountValue: '', travelKm: '' })}
+                  onChange={(e) =>
+                    setForm({ ...form, assignment: e.target.value, amountValue: '', feeAmount: '', travelKm: '' })
+                  }
                 >
                   <option value="">Select an assignment…</option>
                   {assignments.map((a) => (
@@ -172,7 +196,7 @@ export default function TimeRegistration() {
                       ? 'Days worked'
                       : selectedAssignment.billingType === 'half_day'
                       ? 'Days worked (0.5 = one half day)'
-                      : 'Days worked (for tracking, not billed separately)'}
+                      : 'Days worked (optional, for tracking)'}
                   </label>
                   <input
                     type="number"
@@ -183,17 +207,32 @@ export default function TimeRegistration() {
                     onChange={(e) => setForm({ ...form, amountValue: e.target.value })}
                   />
                 </div>
-                <div className="field">
-                  <label>Rate applied</label>
-                  <input
-                    disabled
-                    value={
-                      selectedAssignment.billingType === 'fixed'
-                        ? `${formatEUR(selectedAssignment.rate)} total, fixed fee`
-                        : `${formatEUR(selectedAssignment.rate)} / ${rateUnitLabel(selectedAssignment.billingType)}`
-                    }
-                  />
-                </div>
+                {selectedAssignment.billingType === 'fixed' ? (
+                  <div className="field">
+                    <label>Amount to bill (€)</label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      max={feeRemaining ?? undefined}
+                      required
+                      value={form.feeAmount}
+                      onChange={(e) => setForm({ ...form, feeAmount: e.target.value })}
+                    />
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      Fixed fee {formatEUR(selectedAssignment.rate)}
+                      {feeRemaining !== null && ` · ${formatEUR(feeRemaining)} not yet registered`}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="field">
+                    <label>Rate applied</label>
+                    <input
+                      disabled
+                      value={`${formatEUR(selectedAssignment.rate)} / ${rateUnitLabel(selectedAssignment.billingType)}`}
+                    />
+                  </div>
+                )}
               </div>
             )}
 

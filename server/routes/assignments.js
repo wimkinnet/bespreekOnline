@@ -49,7 +49,6 @@ router.get('/:id', async (req, res) => {
       },
       { hours: 0, days: 0, amount: 0, travelKm: 0, travelAmount: 0 }
     );
-    if (assignment.billingType === 'fixed') totals.amount = assignment.rate;
 
     const documents = await Document.find({ assignment: assignment._id }).sort({ createdAt: -1 });
 

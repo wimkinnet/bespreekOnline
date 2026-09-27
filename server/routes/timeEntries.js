@@ -36,6 +36,20 @@ async function computeTravel({ includeTravel, travelKm, travelRate }, consultant
   return { travelIncluded: true, travelKm: km, travelRate: rate, travelAmount: Math.round(km * rate * 100) / 100 };
 }
 
+// A fixed fee is billed by registering (parts of) it; the registered total may not exceed the fee.
+// Returns an error message, or null when the amount is valid.
+async function validateFeeAmount(assignment, feeAmount, excludeEntryId) {
+  const fee = Number(feeAmount);
+  if (!Number.isFinite(fee) || fee <= 0) return 'This is a fixed-fee assignment - enter the amount to bill.';
+  const others = await TimeEntry.find({ assignment: assignment._id, _id: { $ne: excludeEntryId } }).select('amount');
+  const alreadyBilled = others.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const remaining = Math.round((assignment.rate - alreadyBilled) * 100) / 100;
+  if (fee > remaining + 0.005) {
+    return `Only €${remaining.toFixed(2)} of the €${assignment.rate.toFixed(2)} fixed fee is left to bill.`;
+  }
+  return null;
+}
+
 // GET /api/time-entries?consultant=&assignment=&client=&from=&to=
 // Consultants only ever see their own entries; admins can see everyone's.
 router.get('/', async (req, res) => {
@@ -72,8 +86,18 @@ router.get('/', async (req, res) => {
 // POST /api/time-entries - log time against an assignment
 router.post('/', async (req, res) => {
   try {
-    const { assignment: assignmentId, date, hours, days, description, billable, includeTravel, travelKm, travelRate } =
-      req.body;
+    const {
+      assignment: assignmentId,
+      date,
+      hours,
+      days,
+      feeAmount,
+      description,
+      billable,
+      includeTravel,
+      travelKm,
+      travelRate,
+    } = req.body;
 
     if (!assignmentId || !date) {
       return res.status(400).json({ message: 'Assignment and date are required.' });
@@ -98,7 +122,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'This assignment is billed per half day - enter days in steps of 0.5.' });
     }
 
-    const { amount, rateApplied, billingType } = computeAmount(assignment, { hours, days });
+    if (assignment.billingType === 'fixed') {
+      const feeError = await validateFeeAmount(assignment, feeAmount);
+      if (feeError) return res.status(400).json({ message: feeError });
+    }
+
+    const { amount, rateApplied, billingType } = computeAmount(assignment, { hours, days, feeAmount });
     const consultantId = req.user.role === 'admin' && req.body.consultant ? req.body.consultant : req.user._id;
     const travel = await computeTravel({ includeTravel, travelKm, travelRate }, consultantId, assignment.client);
 
@@ -108,7 +137,7 @@ router.post('/', async (req, res) => {
       client: assignment.client,
       date,
       hours: billingType === 'hourly' ? hours : undefined,
-      days: ['daily', 'half_day'].includes(billingType) ? days : undefined,
+      days: billingType === 'hourly' ? undefined : days || undefined,
       description,
       billable: billable !== undefined ? billable : true,
       billingType,
@@ -144,15 +173,25 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ message: 'This entry has already been invoiced and can only be changed by an admin.' });
     }
 
-    const { date, hours, days, description, billable, includeTravel, travelKm, travelRate } = req.body;
+    const { date, hours, days, feeAmount, description, billable, includeTravel, travelKm, travelRate } = req.body;
     if (date !== undefined) entry.date = date;
     if (description !== undefined) entry.description = description;
     if (billable !== undefined) entry.billable = billable;
 
-    if (hours !== undefined || days !== undefined) {
-      const { amount, rateApplied, billingType } = computeAmount(entry.assignment, { hours, days });
-      entry.hours = billingType === 'hourly' ? hours : undefined;
-      entry.days = ['daily', 'half_day'].includes(billingType) ? days : undefined;
+    if (hours !== undefined || days !== undefined || feeAmount !== undefined) {
+      const isFixed = entry.assignment.billingType === 'fixed';
+      const fee = feeAmount !== undefined ? feeAmount : entry.amount;
+      if (isFixed) {
+        const feeError = await validateFeeAmount(entry.assignment, fee, entry._id);
+        if (feeError) return res.status(400).json({ message: feeError });
+      }
+      const { amount, rateApplied, billingType } = computeAmount(entry.assignment, {
+        hours: hours !== undefined ? hours : entry.hours,
+        days: days !== undefined ? days : entry.days,
+        feeAmount: fee,
+      });
+      entry.hours = billingType === 'hourly' ? (hours !== undefined ? hours : entry.hours) : undefined;
+      entry.days = billingType === 'hourly' ? undefined : (days !== undefined ? days : entry.days) || undefined;
       entry.amount = amount;
       entry.rateApplied = rateApplied;
     }

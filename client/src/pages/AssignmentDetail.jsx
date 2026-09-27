@@ -132,10 +132,13 @@ export default function AssignmentDetail() {
           </div>
         </div>
         <div className="stat">
-          <div className="label">Total value</div>
+          <div className="label">Registered</div>
           <div className="value" style={{ fontSize: 18 }}>
             {formatEUR(totals.amount)}
           </div>
+          {assignment.billingType === 'fixed' && (
+            <div className="muted" style={{ fontSize: 12 }}>of {formatEUR(assignment.rate)} fixed fee</div>
+          )}
           {totals.travelAmount > 0 && (
             <div className="muted" style={{ fontSize: 12 }}>
               + {formatEUR(totals.travelAmount)} travel ({totals.travelKm.toFixed(1)} km)

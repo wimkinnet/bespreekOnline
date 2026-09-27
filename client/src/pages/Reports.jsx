@@ -33,7 +33,7 @@ export default function Reports() {
       <div className="page-header">
         <div>
           <h1>Reports</h1>
-          <p>Billing totals by client, consultant and assignment.</p>
+          <p>Registered income by client, consultant and assignment.</p>
         </div>
       </div>
 
@@ -55,16 +55,12 @@ export default function Reports() {
         <>
           <div className="stat-grid">
             <div className="stat">
-              <div className="label">Total billable (time-based)</div>
+              <div className="label">Registered income</div>
               <div className="value">{formatEUR(report.grandTotal)}</div>
             </div>
             <div className="stat">
               <div className="label">Travel costs</div>
               <div className="value">{formatEUR(report.travelTotal)}</div>
-            </div>
-            <div className="stat">
-              <div className="label">Fixed-fee assignments</div>
-              <div className="value">{report.fixedAssignments.length}</div>
             </div>
           </div>
 
@@ -161,34 +157,6 @@ export default function Reports() {
               </table>
             )}
           </div>
-
-          {report.fixedAssignments.length > 0 && (
-            <>
-              <h2 style={{ marginBottom: 10 }}>Fixed-fee assignments (billed once, not time-based)</h2>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Assignment</th>
-                      <th>Client</th>
-                      <th>Status</th>
-                      <th>Fee</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.fixedAssignments.map((a) => (
-                      <tr key={a._id}>
-                        <td>{a.title}</td>
-                        <td>{a.client?.name}</td>
-                        <td style={{ textTransform: 'capitalize' }}>{a.status.replace('_', ' ')}</td>
-                        <td>{formatEUR(a.rate)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
         </>
       )}
     </div>

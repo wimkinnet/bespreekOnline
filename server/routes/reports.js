@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const TimeEntry = require('../models/TimeEntry');
-const Assignment = require('../models/Assignment');
 const { protect, requireRole } = require('../middleware/auth');
 
 router.use(protect, requireRole('admin'));
 
 // GET /api/reports/summary?from=&to=
 // Returns totals grouped by client, by consultant, and grand totals, for a date range.
+// Income only counts what was registered as time entries (including fixed fees).
 router.get('/summary', async (req, res) => {
   try {
     const { from, to } = req.query;
@@ -87,13 +87,7 @@ router.get('/summary', async (req, res) => {
     const grandTotal = byClient.reduce((sum, c) => sum + c.amount, 0);
     const travelTotal = byClient.reduce((sum, c) => sum + c.travelAmount, 0);
 
-    // Fixed-fee assignments active in range don't generate time-entry amounts,
-    // so surface them separately for a complete billing picture.
-    const fixedAssignments = await Assignment.find({ billingType: 'fixed' })
-      .populate('client', 'name')
-      .select('title client rate status');
-
-    res.json({ byClient, byConsultant, byAssignment, grandTotal, travelTotal, fixedAssignments });
+    res.json({ byClient, byConsultant, byAssignment, grandTotal, travelTotal });
   } catch (err) {
     res.status(500).json({ message: 'Could not build report.', error: err.message });
   }

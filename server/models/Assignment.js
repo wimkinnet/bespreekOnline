@@ -15,7 +15,8 @@ const assignmentSchema = new mongoose.Schema(
     // hourly  -> rate is EUR per hour
     // daily   -> rate is EUR per day
     // half_day -> rate is EUR per half day (time is still logged in days, in steps of 0.5)
-    // fixed   -> rate is the total fixed fee for the whole assignment
+    // fixed   -> rate is the total fixed fee for the whole assignment; it is billed by registering
+    //            time entries with an amount (in one go or in instalments), never automatically
     billingType: { type: String, enum: ['hourly', 'daily', 'half_day', 'fixed'], default: 'hourly' },
     rate: { type: Number, required: true, min: 0 },
     currency: { type: String, default: 'EUR' },

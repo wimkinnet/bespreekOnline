@@ -1,8 +1,8 @@
 // Given an assignment (with billingType + rate) and the hours/days logged,
 // returns { amount, rateApplied, billingType } to store on the TimeEntry.
-// Fixed-fee assignments are tracked for hours/days internally but billed once,
-// so their time entries carry amount 0 (the fee lives on the assignment itself).
-function computeAmount(assignment, { hours, days }) {
+// Fixed-fee assignments are billed through time registration too: each entry bills
+// `feeAmount` (the whole fee or an instalment of it); days are tracked for visibility only.
+function computeAmount(assignment, { hours, days, feeAmount }) {
   const billingType = assignment.billingType;
   const rateApplied = assignment.rate;
 
@@ -19,7 +19,8 @@ function computeAmount(assignment, { hours, days }) {
     return { amount: Math.round(halfDays * rateApplied * 100) / 100, rateApplied, billingType };
   }
   // fixed
-  return { amount: 0, rateApplied, billingType };
+  const fee = Number(feeAmount) || 0;
+  return { amount: Math.round(fee * 100) / 100, rateApplied, billingType };
 }
 
 module.exports = computeAmount;
