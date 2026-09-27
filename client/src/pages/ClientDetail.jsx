@@ -13,6 +13,7 @@ const emptyAssignment = {
   status: 'active',
   startDate: '',
   endDate: '',
+  consultants: [],
 };
 
 export default function ClientDetail() {
@@ -25,6 +26,7 @@ export default function ClientDetail() {
   const [groupAssignments, setGroupAssignments] = useState([]);
   const [schools, setSchools] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [consultants, setConsultants] = useState([]);
   const [groupError, setGroupError] = useState('');
   const [editing, setEditing] = useState(false);
   const [savingClient, setSavingClient] = useState(false);
@@ -64,7 +66,17 @@ export default function ClientDetail() {
   useEffect(() => {
     if (user.role !== 'admin') return;
     api.get('/clients', { params: { type: 'school_pool' } }).then(({ data }) => setGroups(data));
+    api.get('/users').then(({ data }) => setConsultants(data.filter((u) => u.active)));
   }, [user.role]);
+
+  function toggleAssignmentConsultant(userId) {
+    setAssignmentForm((f) => ({
+      ...f,
+      consultants: f.consultants.includes(userId)
+        ? f.consultants.filter((c) => c !== userId)
+        : [...f.consultants, userId],
+    }));
+  }
 
   async function handleChangeGroup(parentPool) {
     setGroupError('');
@@ -104,6 +116,7 @@ export default function ClientDetail() {
         status: assignmentForm.status,
         startDate: assignmentForm.startDate || undefined,
         endDate: assignmentForm.endDate || undefined,
+        consultants: assignmentForm.consultants,
       });
       setShowAssignmentForm(false);
       setAssignmentForm(emptyAssignment);
@@ -540,6 +553,21 @@ export default function ClientDetail() {
                   <option value="on_hold">On hold</option>
                   <option value="completed">Completed</option>
                 </select>
+              </div>
+              <div className="field">
+                <label>Staffed consultants</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {consultants.map((u) => (
+                    <label className="checkbox-row" key={u.id}>
+                      <input
+                        type="checkbox"
+                        checked={assignmentForm.consultants.includes(u.id)}
+                        onChange={() => toggleAssignmentConsultant(u.id)}
+                      />
+                      {u.name}
+                    </label>
+                  ))}
+                </div>
               </div>
               <button className="btn btn-primary" type="submit" disabled={savingAssignment}>
                 {savingAssignment ? 'Saving…' : 'Create assignment'}
