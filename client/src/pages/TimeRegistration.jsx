@@ -280,7 +280,7 @@ export default function TimeRegistration() {
                   {travelLoading && <div className="muted" style={{ fontSize: 12 }}>Calculating distance…</div>}
                   {travel && (
                     <div className="muted" style={{ fontSize: 12 }}>
-                      {travel.oneWayKm} km each way from {travel.from} to {travel.to}. Adjust if you drove further.
+                      {travel.oneWayKm} km each way from {travel.from} to {travel.to}, rounded up to a multiple of 5 km. Adjust if you drove further.
                     </div>
                   )}
                   {travelError && (

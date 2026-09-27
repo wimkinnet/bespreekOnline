@@ -78,7 +78,8 @@ async function travelForConsultant(consultant, client) {
     throw new DistanceError(`${client.name} has no address yet.`);
   }
   const oneWayKm = await drivingDistanceKm(consultant.homeAddress, client.address);
-  const roundTripKm = Math.round(oneWayKm * 2 * 10) / 10;
+  // Proposed mileage is rounded up to a multiple of 5 km
+  const roundTripKm = Math.ceil((oneWayKm * 2) / 5) * 5;
   const ratePerKm = travelRatePerKm();
   return {
     from: formatAddress(consultant.homeAddress),
