@@ -11,6 +11,7 @@ const assignmentRoutes = require('./routes/assignments');
 const timeEntryRoutes = require('./routes/timeEntries');
 const documentRoutes = require('./routes/documents');
 const reportRoutes = require('./routes/reports');
+const distanceRoutes = require('./routes/distance');
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use('/api/assignments', assignmentRoutes);
 app.use('/api/time-entries', timeEntryRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/distance', distanceRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

@@ -23,6 +23,10 @@ services:
         value: /var/data/uploads
       - key: CLIENT_URL
         value: ""
+      - key: TRAVEL_RATE_PER_KM
+        value: "0.45"
+      - key: GEOCODER_USER_AGENT
+        sync: false
       - key: SEED_ADMIN_NAME
         sync: false
       - key: SEED_ADMIN_EMAIL

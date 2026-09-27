@@ -10,6 +10,13 @@ const userSchema = new mongoose.Schema(
     active: { type: Boolean, default: true },
     phone: { type: String, trim: true },
     hourlyCost: { type: Number }, // optional: internal cost rate, not shown to clients
+    // Starting point for travel-distance calculations to clients
+    homeAddress: {
+      street: { type: String, trim: true },
+      postalCode: { type: String, trim: true },
+      city: { type: String, trim: true },
+      country: { type: String, default: 'Belgium' },
+    },
   },
   { timestamps: true }
 );
@@ -33,6 +40,7 @@ userSchema.methods.toSafeObject = function () {
     role: this.role,
     active: this.active,
     phone: this.phone,
+    homeAddress: this.homeAddress,
     createdAt: this.createdAt,
   };
 };

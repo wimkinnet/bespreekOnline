@@ -3,9 +3,38 @@ const router = express.Router();
 const TimeEntry = require('../models/TimeEntry');
 const Assignment = require('../models/Assignment');
 const { protect, requireRole } = require('../middleware/auth');
+const Client = require('../models/Client');
+const User = require('../models/User');
 const computeAmount = require('../utils/computeAmount');
+const { travelForConsultant, travelRatePerKm, DistanceError } = require('../utils/distance');
 
 router.use(protect);
+
+// Travel fields for a time entry. Uses the km the consultant confirmed (they may correct the
+// suggested distance), or looks up the round-trip distance from their home address to the client.
+// The rate per km is chosen per entry; without one, the default from TRAVEL_RATE_PER_KM applies.
+async function computeTravel({ includeTravel, travelKm, travelRate }, consultantId, clientId) {
+  if (!includeTravel) {
+    return { travelIncluded: false, travelKm: undefined, travelRate: undefined, travelAmount: 0 };
+  }
+  let km = travelKm !== undefined && travelKm !== '' && travelKm !== null ? Number(travelKm) : null;
+  if (km !== null && (!Number.isFinite(km) || km < 0)) {
+    throw new DistanceError('Travel distance must be a positive number of km.');
+  }
+  if (km === null) {
+    const [consultant, client] = await Promise.all([
+      User.findById(consultantId).select('name homeAddress'),
+      Client.findById(clientId).select('name address'),
+    ]);
+    km = (await travelForConsultant(consultant, client)).roundTripKm;
+  }
+  const rate =
+    travelRate !== undefined && travelRate !== '' && travelRate !== null ? Number(travelRate) : travelRatePerKm();
+  if (!Number.isFinite(rate) || rate < 0) {
+    throw new DistanceError('Travel rate must be a positive amount per km.');
+  }
+  return { travelIncluded: true, travelKm: km, travelRate: rate, travelAmount: Math.round(km * rate * 100) / 100 };
+}
 
 // GET /api/time-entries?consultant=&assignment=&client=&from=&to=
 // Consultants only ever see their own entries; admins can see everyone's.
@@ -43,7 +72,8 @@ router.get('/', async (req, res) => {
 // POST /api/time-entries - log time against an assignment
 router.post('/', async (req, res) => {
   try {
-    const { assignment: assignmentId, date, hours, days, description, billable } = req.body;
+    const { assignment: assignmentId, date, hours, days, description, billable, includeTravel, travelKm, travelRate } =
+      req.body;
 
     if (!assignmentId || !date) {
       return res.status(400).json({ message: 'Assignment and date are required.' });
@@ -69,9 +99,11 @@ router.post('/', async (req, res) => {
     }
 
     const { amount, rateApplied, billingType } = computeAmount(assignment, { hours, days });
+    const consultantId = req.user.role === 'admin' && req.body.consultant ? req.body.consultant : req.user._id;
+    const travel = await computeTravel({ includeTravel, travelKm, travelRate }, consultantId, assignment.client);
 
     const entry = await TimeEntry.create({
-      consultant: req.user.role === 'admin' && req.body.consultant ? req.body.consultant : req.user._id,
+      consultant: consultantId,
       assignment: assignment._id,
       client: assignment.client,
       date,
@@ -82,6 +114,7 @@ router.post('/', async (req, res) => {
       billingType,
       rateApplied,
       amount,
+      ...travel,
     });
 
     const populated = await entry.populate([
@@ -92,6 +125,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(populated);
   } catch (err) {
+    if (err instanceof DistanceError) return res.status(422).json({ message: err.message });
     res.status(400).json({ message: 'Could not save time entry.', error: err.message });
   }
 });
@@ -110,7 +144,7 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ message: 'This entry has already been invoiced and can only be changed by an admin.' });
     }
 
-    const { date, hours, days, description, billable } = req.body;
+    const { date, hours, days, description, billable, includeTravel, travelKm, travelRate } = req.body;
     if (date !== undefined) entry.date = date;
     if (description !== undefined) entry.description = description;
     if (billable !== undefined) entry.billable = billable;
@@ -123,9 +157,23 @@ router.put('/:id', async (req, res) => {
       entry.rateApplied = rateApplied;
     }
 
+    if (includeTravel !== undefined || travelKm !== undefined || travelRate !== undefined) {
+      const travel = await computeTravel(
+        {
+          includeTravel: includeTravel !== undefined ? includeTravel : entry.travelIncluded,
+          travelKm: travelKm !== undefined ? travelKm : entry.travelKm,
+          travelRate: travelRate !== undefined ? travelRate : entry.travelRate,
+        },
+        entry.consultant,
+        entry.client
+      );
+      Object.assign(entry, travel);
+    }
+
     await entry.save();
     res.json(entry);
   } catch (err) {
+    if (err instanceof DistanceError) return res.status(422).json({ message: err.message });
     res.status(400).json({ message: 'Could not update time entry.', error: err.message });
   }
 });

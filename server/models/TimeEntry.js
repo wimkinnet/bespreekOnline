@@ -15,6 +15,11 @@ const timeEntrySchema = new mongoose.Schema(
     billingType: { type: String, enum: ['hourly', 'daily', 'half_day', 'fixed'], required: true },
     rateApplied: { type: Number, required: true },
     amount: { type: Number, required: true }, // computed: hours*rate, days*rate, or 0 for fixed
+    // Travel costs, billed on top of the work amount (also for fixed-fee assignments)
+    travelIncluded: { type: Boolean, default: false },
+    travelKm: { type: Number, min: 0 }, // round trip, consultant's home -> client -> home
+    travelRate: { type: Number, min: 0 }, // EUR per km at the time of entry
+    travelAmount: { type: Number, default: 0 },
     invoiced: { type: Boolean, default: false },
   },
   { timestamps: true }

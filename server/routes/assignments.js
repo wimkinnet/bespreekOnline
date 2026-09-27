@@ -43,9 +43,11 @@ router.get('/:id', async (req, res) => {
         acc.hours += e.hours || 0;
         acc.days += e.days || 0;
         acc.amount += e.amount || 0;
+        acc.travelKm += e.travelKm || 0;
+        acc.travelAmount += e.travelAmount || 0;
         return acc;
       },
-      { hours: 0, days: 0, amount: 0 }
+      { hours: 0, days: 0, amount: 0, travelKm: 0, travelAmount: 0 }
     );
     if (assignment.billingType === 'fixed') totals.amount = assignment.rate;
 

@@ -26,12 +26,13 @@ router.get('/summary', async (req, res) => {
           hours: { $sum: { $ifNull: ['$hours', 0] } },
           days: { $sum: { $ifNull: ['$days', 0] } },
           amount: { $sum: '$amount' },
+          travelAmount: { $sum: { $ifNull: ['$travelAmount', 0] } },
           entries: { $sum: 1 },
         },
       },
       { $lookup: { from: 'clients', localField: '_id', foreignField: '_id', as: 'client' } },
       { $unwind: '$client' },
-      { $project: { clientName: '$client.name', hours: 1, days: 1, amount: 1, entries: 1 } },
+      { $project: { clientName: '$client.name', hours: 1, days: 1, amount: 1, travelAmount: 1, entries: 1 } },
       { $sort: { amount: -1 } },
     ]);
 
@@ -43,12 +44,13 @@ router.get('/summary', async (req, res) => {
           hours: { $sum: { $ifNull: ['$hours', 0] } },
           days: { $sum: { $ifNull: ['$days', 0] } },
           amount: { $sum: '$amount' },
+          travelAmount: { $sum: { $ifNull: ['$travelAmount', 0] } },
           entries: { $sum: 1 },
         },
       },
       { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
       { $unwind: '$user' },
-      { $project: { consultantName: '$user.name', hours: 1, days: 1, amount: 1, entries: 1 } },
+      { $project: { consultantName: '$user.name', hours: 1, days: 1, amount: 1, travelAmount: 1, entries: 1 } },
       { $sort: { amount: -1 } },
     ]);
 
@@ -60,6 +62,7 @@ router.get('/summary', async (req, res) => {
           hours: { $sum: { $ifNull: ['$hours', 0] } },
           days: { $sum: { $ifNull: ['$days', 0] } },
           amount: { $sum: '$amount' },
+          travelAmount: { $sum: { $ifNull: ['$travelAmount', 0] } },
           entries: { $sum: 1 },
           invoicedAmount: { $sum: { $cond: ['$invoiced', '$amount', 0] } },
         },
@@ -73,6 +76,7 @@ router.get('/summary', async (req, res) => {
           hours: 1,
           days: 1,
           amount: 1,
+          travelAmount: 1,
           entries: 1,
           invoicedAmount: 1,
         },
@@ -81,6 +85,7 @@ router.get('/summary', async (req, res) => {
     ]);
 
     const grandTotal = byClient.reduce((sum, c) => sum + c.amount, 0);
+    const travelTotal = byClient.reduce((sum, c) => sum + c.travelAmount, 0);
 
     // Fixed-fee assignments active in range don't generate time-entry amounts,
     // so surface them separately for a complete billing picture.
@@ -88,7 +93,7 @@ router.get('/summary', async (req, res) => {
       .populate('client', 'name')
       .select('title client rate status');
 
-    res.json({ byClient, byConsultant, byAssignment, grandTotal, fixedAssignments });
+    res.json({ byClient, byConsultant, byAssignment, grandTotal, travelTotal, fixedAssignments });
   } catch (err) {
     res.status(500).json({ message: 'Could not build report.', error: err.message });
   }

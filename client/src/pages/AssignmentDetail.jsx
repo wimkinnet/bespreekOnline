@@ -122,6 +122,11 @@ export default function AssignmentDetail() {
           <div className="value" style={{ fontSize: 18 }}>
             {formatEUR(totals.amount)}
           </div>
+          {totals.travelAmount > 0 && (
+            <div className="muted" style={{ fontSize: 12 }}>
+              + {formatEUR(totals.travelAmount)} travel ({totals.travelKm.toFixed(1)} km)
+            </div>
+          )}
         </div>
       </div>
 
@@ -207,6 +212,7 @@ export default function AssignmentDetail() {
                 <th>Logged</th>
                 <th>Description</th>
                 <th>Amount</th>
+                <th>Travel</th>
                 <th>Invoiced</th>
               </tr>
             </thead>
@@ -218,6 +224,7 @@ export default function AssignmentDetail() {
                   <td>{e.hours ? `${e.hours} h` : e.days ? `${e.days} d` : '—'}</td>
                   <td>{e.description || '—'}</td>
                   <td>{formatEUR(e.amount)}</td>
+                  <td>{e.travelIncluded ? `${e.travelKm} km × ${formatEUR(e.travelRate)} = ${formatEUR(e.travelAmount)}` : '—'}</td>
                   <td>{e.invoiced ? 'Yes' : 'No'}</td>
                 </tr>
               ))}

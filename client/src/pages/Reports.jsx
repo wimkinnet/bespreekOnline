@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
-import { formatEUR } from '../utils/format';
+import { formatEUR, billingTypeLabel } from '../utils/format';
 
 function firstOfMonth() {
   const d = new Date();
@@ -59,6 +59,10 @@ export default function Reports() {
               <div className="value">{formatEUR(report.grandTotal)}</div>
             </div>
             <div className="stat">
+              <div className="label">Travel costs</div>
+              <div className="value">{formatEUR(report.travelTotal)}</div>
+            </div>
+            <div className="stat">
               <div className="label">Fixed-fee assignments</div>
               <div className="value">{report.fixedAssignments.length}</div>
             </div>
@@ -77,6 +81,7 @@ export default function Reports() {
                     <th>Days</th>
                     <th>Entries</th>
                     <th>Amount</th>
+                    <th>Travel</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -87,6 +92,7 @@ export default function Reports() {
                       <td>{c.days.toFixed(1)}</td>
                       <td>{c.entries}</td>
                       <td>{formatEUR(c.amount)}</td>
+                      <td>{formatEUR(c.travelAmount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -107,6 +113,7 @@ export default function Reports() {
                     <th>Days</th>
                     <th>Entries</th>
                     <th>Amount</th>
+                    <th>Travel</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -117,6 +124,7 @@ export default function Reports() {
                       <td>{c.days.toFixed(1)}</td>
                       <td>{c.entries}</td>
                       <td>{formatEUR(c.amount)}</td>
+                      <td>{formatEUR(c.travelAmount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -135,6 +143,7 @@ export default function Reports() {
                     <th>Assignment</th>
                     <th>Billing</th>
                     <th>Amount</th>
+                    <th>Travel</th>
                     <th>Invoiced</th>
                   </tr>
                 </thead>
@@ -142,8 +151,9 @@ export default function Reports() {
                   {report.byAssignment.map((a) => (
                     <tr key={a.assignmentTitle}>
                       <td>{a.assignmentTitle}</td>
-                      <td style={{ textTransform: 'capitalize' }}>{a.billingType}</td>
+                      <td>{billingTypeLabel(a.billingType)}</td>
                       <td>{formatEUR(a.amount)}</td>
+                      <td>{formatEUR(a.travelAmount)}</td>
                       <td>{formatEUR(a.invoicedAmount)}</td>
                     </tr>
                   ))}

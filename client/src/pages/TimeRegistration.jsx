@@ -4,6 +4,19 @@ import { useAuth } from '../context/AuthContext';
 import { formatEUR, formatDate, billingTypeLabel, rateUnitLabel } from '../utils/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
+const DEFAULT_TRAVEL_RATE = '0.45'; // EUR per km
+
+// includeTravel starts unanswered (null) so the consultant has to choose yes or no for every entry
+const emptyEntry = (assignment = '') => ({
+  assignment,
+  date: today(),
+  amountValue: '',
+  description: '',
+  billable: true,
+  includeTravel: null,
+  travelKm: '',
+  travelRate: DEFAULT_TRAVEL_RATE,
+});
 
 export default function TimeRegistration() {
   const { user } = useAuth();
@@ -13,13 +26,10 @@ export default function TimeRegistration() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({
-    assignment: '',
-    date: today(),
-    amountValue: '',
-    description: '',
-    billable: true,
-  });
+  const [form, setForm] = useState(emptyEntry());
+  const [travel, setTravel] = useState(null); // distance lookup result for the selected assignment
+  const [travelError, setTravelError] = useState('');
+  const [travelLoading, setTravelLoading] = useState(false);
 
   const selectedAssignment = assignments.find((a) => a._id === form.assignment);
 
@@ -41,6 +51,32 @@ export default function TimeRegistration() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Look up the distance from the consultant's home to the client once travel costs are requested
+  const clientId = selectedAssignment?.client?._id;
+  useEffect(() => {
+    if (!form.includeTravel || !clientId) return;
+    let cancelled = false;
+    setTravel(null);
+    setTravelError('');
+    setTravelLoading(true);
+    api
+      .get('/distance', { params: { client: clientId } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setTravel(data);
+        setForm((f) => ({ ...f, travelKm: String(data.roundTripKm) }));
+      })
+      .catch((err) => {
+        if (!cancelled) setTravelError(err.response?.data?.message || 'Could not calculate the distance.');
+      })
+      .finally(() => {
+        if (!cancelled) setTravelLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.includeTravel, clientId]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!selectedAssignment) return;
@@ -52,14 +88,19 @@ export default function TimeRegistration() {
         date: form.date,
         description: form.description,
         billable: form.billable,
+        includeTravel: form.includeTravel,
       };
+      if (form.includeTravel) {
+        if (form.travelKm !== '') payload.travelKm = Number(form.travelKm);
+        payload.travelRate = Number(form.travelRate);
+      }
       if (selectedAssignment.billingType === 'hourly') payload.hours = Number(form.amountValue);
       if (['daily', 'half_day'].includes(selectedAssignment.billingType)) payload.days = Number(form.amountValue);
       // Fixed-fee assignments still track days worked internally for visibility
       if (selectedAssignment.billingType === 'fixed') payload.days = Number(form.amountValue) || undefined;
 
       await api.post('/time-entries', payload);
-      setForm({ assignment: form.assignment, date: today(), amountValue: '', description: '', billable: true });
+      setForm(emptyEntry(form.assignment));
       load();
     } catch (err) {
       setError(err.response?.data?.message || 'Could not save time entry.');
@@ -100,7 +141,7 @@ export default function TimeRegistration() {
                 <select
                   required
                   value={form.assignment}
-                  onChange={(e) => setForm({ ...form, assignment: e.target.value, amountValue: '' })}
+                  onChange={(e) => setForm({ ...form, assignment: e.target.value, amountValue: '', travelKm: '' })}
                 >
                   <option value="">Select an assignment…</option>
                   {assignments.map((a) => (
@@ -156,6 +197,84 @@ export default function TimeRegistration() {
               </div>
             )}
 
+            {selectedAssignment && (
+              <div className="field">
+                <label>Include travel costs?</label>
+                <div style={{ display: 'flex', gap: 18 }}>
+                  <label className="checkbox-row" style={{ margin: 0 }}>
+                    <input
+                      type="radio"
+                      name="includeTravel"
+                      required
+                      checked={form.includeTravel === true}
+                      onChange={() => setForm({ ...form, includeTravel: true })}
+                    />
+                    Yes
+                  </label>
+                  <label className="checkbox-row" style={{ margin: 0 }}>
+                    <input
+                      type="radio"
+                      name="includeTravel"
+                      required
+                      checked={form.includeTravel === false}
+                      onChange={() => setForm({ ...form, includeTravel: false, travelKm: '' })}
+                    />
+                    No
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {selectedAssignment && form.includeTravel && (
+              <div className="field-row">
+                <div className="field">
+                  <label>Distance, round trip (km)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    required
+                    placeholder={travelLoading ? 'Calculating…' : ''}
+                    value={form.travelKm}
+                    onChange={(e) => setForm({ ...form, travelKm: e.target.value })}
+                  />
+                  {travelLoading && <div className="muted" style={{ fontSize: 12 }}>Calculating distance…</div>}
+                  {travel && (
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {travel.oneWayKm} km each way from {travel.from} to {travel.to}. Adjust if you drove further.
+                    </div>
+                  )}
+                  {travelError && (
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {travelError} Enter the distance manually.
+                    </div>
+                  )}
+                </div>
+                <div className="field">
+                  <label>Rate (€ / km)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={form.travelRate}
+                    onChange={(e) => setForm({ ...form, travelRate: e.target.value })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Travel costs</label>
+                  <input
+                    disabled
+                    value={
+                      form.travelKm !== '' && form.travelRate !== ''
+                        ? formatEUR(Number(form.travelKm) * Number(form.travelRate))
+                        : '—'
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="field">
               <label>Description</label>
               <input
@@ -194,6 +313,7 @@ export default function TimeRegistration() {
                 <th>Assignment</th>
                 <th>Logged</th>
                 <th>Amount</th>
+                <th>Travel</th>
                 <th>Billable</th>
                 <th></th>
               </tr>
@@ -206,6 +326,7 @@ export default function TimeRegistration() {
                   <td>{e.assignment?.title}</td>
                   <td>{e.hours ? `${e.hours} h` : e.days ? `${e.days} d` : '—'}</td>
                   <td>{formatEUR(e.amount)}</td>
+                  <td>{e.travelIncluded ? `${e.travelKm} km × ${formatEUR(e.travelRate)} = ${formatEUR(e.travelAmount)}` : '—'}</td>
                   <td>{e.billable ? 'Yes' : 'No'}</td>
                   <td style={{ textAlign: 'right' }}>
                     {!e.invoiced && (
