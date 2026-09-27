@@ -26,6 +26,8 @@ export default function AssignmentDetail() {
       billingType: res.assignment.billingType,
       rate: res.assignment.rate,
       consultants: res.assignment.consultants.map((c) => c._id),
+      startDate: res.assignment.startDate ? res.assignment.startDate.slice(0, 10) : '',
+      endDate: res.assignment.endDate ? res.assignment.endDate.slice(0, 10) : '',
     });
     if (user.role === 'admin') {
       const { data: userList } = await api.get('/users');
@@ -49,6 +51,8 @@ export default function AssignmentDetail() {
         billingType: form.billingType,
         rate: Number(form.rate),
         consultants: form.consultants,
+        startDate: form.startDate || null,
+        endDate: form.endDate || null,
       });
       setEditing(false);
       load();
@@ -108,6 +112,16 @@ export default function AssignmentDetail() {
           </div>
         </div>
         <div className="stat">
+          <div className="label">Period</div>
+          <div className="value" style={{ fontSize: 18 }}>
+            {assignment.startDate || assignment.endDate
+              ? `${assignment.startDate ? formatDate(assignment.startDate) : '…'} – ${
+                  assignment.endDate ? formatDate(assignment.endDate) : '…'
+                }`
+              : '—'}
+          </div>
+        </div>
+        <div className="stat">
           <div className="label">Logged</div>
           <div className="value" style={{ fontSize: 18 }}>
             {assignment.billingType === 'hourly'
@@ -153,6 +167,24 @@ export default function AssignmentDetail() {
                   step="0.01"
                   value={form.rate}
                   onChange={(e) => setForm({ ...form, rate: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="field-row">
+              <div className="field">
+                <label>Start date</label>
+                <input
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label>End date</label>
+                <input
+                  type="date"
+                  value={form.endDate}
+                  onChange={(e) => setForm({ ...form, endDate: e.target.value })}
                 />
               </div>
             </div>
