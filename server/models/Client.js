@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const clientSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    type: { type: String, enum: ['school', 'school_pool'], default: 'school' },
-    // A school may optionally belong to a school group (scholengroep); school groups have no parent.
+    type: { type: String, enum: ['school', 'school_pool', 'other'], default: 'school' },
+    // A school may optionally belong to a school group (scholengroep); school groups and 'other' clients have no parent.
     // Assignments can be linked to either a school or a school group.
     parentPool: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', default: null },
     address: {

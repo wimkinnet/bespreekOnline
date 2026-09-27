@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import { formatDate, billingTypeLabel, statusLabel } from '../utils/format';
+import { formatDate, billingTypeLabel, statusLabel, clientTypeLabel } from '../utils/format';
 
 const emptyAssignment = {
   title: '',
@@ -145,7 +145,7 @@ export default function ClientDetail() {
         <div>
           <h1>{client.name}</h1>
           <p>
-            {client.type === 'school_pool' ? 'School group' : 'School'}
+            {clientTypeLabel(client.type)}
             {client.parentPool && (
               <>
                 {' · part of '}

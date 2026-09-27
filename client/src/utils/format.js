@@ -16,3 +16,7 @@ export function billingTypeLabel(type) {
 export function statusLabel(status) {
   return status.replace('_', ' ').replace(/^\w/, (c) => c.toUpperCase());
 }
+
+export function clientTypeLabel(type) {
+  return { school: 'School', school_pool: 'School group', other: 'Other' }[type] || type;
+}

@@ -9,13 +9,12 @@ const { protect, requireRole } = require('../middleware/auth');
 router.use(protect);
 
 // Enforce the hierarchy: only a school can have a parent, and that parent must be a school group.
+// Clients of type 'other' stand on their own, like school groups.
 // Returns an error message, or null when the data is valid.
 async function validateHierarchy(data, clientId) {
-  if (data.type === 'school_pool') {
-    data.parentPool = null;
-    if (clientId) return null;
-  }
-  if (clientId && data.type === 'school') {
+  if (data.type !== 'school') data.parentPool = null;
+  if (clientId && data.type === 'school_pool') return null;
+  if (clientId && data.type !== 'school_pool') {
     const memberCount = await Client.countDocuments({ parentPool: clientId });
     if (memberCount > 0) {
       return `This school group still has ${memberCount} school(s). Unlink them before changing its type.`;

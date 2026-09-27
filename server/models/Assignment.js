@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const assignmentSchema = new mongoose.Schema(
   {
-    // Either a school or a school group (a Client with type 'school_pool')
+    // A school, a school group (a Client with type 'school_pool') or another organisation (type 'other')
     client: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', required: true },
     title: { type: String, required: true, trim: true },
     description: { type: String },

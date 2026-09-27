@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import { clientTypeLabel } from '../utils/format';
 
 const emptyForm = {
   name: '',
@@ -85,7 +86,7 @@ export default function Clients() {
       <div className="page-header">
         <div>
           <h1>Clients</h1>
-          <p>Schools and school groups you advise.</p>
+          <p>Schools, school groups and other organisations you advise.</p>
         </div>
         {user.role === 'admin' && (
           <button className="btn btn-primary" onClick={() => setShowForm(true)}>
@@ -109,6 +110,7 @@ export default function Clients() {
           <option value="">All types</option>
           <option value="school">School</option>
           <option value="school_pool">School group</option>
+          <option value="other">Other</option>
         </select>
       </div>
 
@@ -137,7 +139,7 @@ export default function Clients() {
                   <td>
                     <strong>{c.name}</strong>
                   </td>
-                  <td>{c.type === 'school_pool' ? 'School group' : 'School'}</td>
+                  <td>{clientTypeLabel(c.type)}</td>
                   <td>{c.parentPool?.name || '—'}</td>
                   <td>{c.address?.city || '—'}</td>
                   <td>{c.contactName || '—'}</td>
@@ -176,6 +178,7 @@ export default function Clients() {
                   <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
                     <option value="school">School</option>
                     <option value="school_pool">School group</option>
+                    <option value="other">Other</option>
                   </select>
                 </div>
                 <div className="field">
