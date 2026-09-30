@@ -15,12 +15,30 @@ export default function Reports() {
   const [to, setTo] = useState(today());
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   async function load() {
     setLoading(true);
     const { data } = await api.get('/reports/summary', { params: { from, to } });
     setReport(data);
     setLoading(false);
+  }
+
+  async function exportByClient() {
+    setExporting(true);
+    try {
+      const res = await api.get('/reports/by-client.xlsx', { params: { from, to }, responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `report-by-client_${from}_${to}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Could not export the report.');
+    } finally {
+      setExporting(false);
+    }
   }
 
   useEffect(() => {
@@ -49,6 +67,9 @@ export default function Reports() {
         <button className="btn btn-primary" onClick={load} disabled={loading}>
           {loading ? 'Loading…' : 'Update'}
         </button>
+        <button className="btn" onClick={exportByClient} disabled={exporting}>
+          {exporting ? 'Exporting…' : 'Export to Excel'}
+        </button>
       </div>
 
       {report && (
@@ -61,6 +82,10 @@ export default function Reports() {
             <div className="stat">
               <div className="label">Travel costs</div>
               <div className="value">{formatEUR(report.travelTotal)}</div>
+            </div>
+            <div className="stat">
+              <div className="label">Total incl. {Math.round(report.vatRate * 100)}% VAT</div>
+              <div className="value">{formatEUR(report.totalInclVat)}</div>
             </div>
           </div>
 
@@ -78,6 +103,9 @@ export default function Reports() {
                     <th>Entries</th>
                     <th>Amount</th>
                     <th>Travel</th>
+                    <th>Total excl. VAT</th>
+                    <th>VAT {Math.round(report.vatRate * 100)}%</th>
+                    <th>Total incl. VAT</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -89,6 +117,9 @@ export default function Reports() {
                       <td>{c.entries}</td>
                       <td>{formatEUR(c.amount)}</td>
                       <td>{formatEUR(c.travelAmount)}</td>
+                      <td>{formatEUR(c.totalExclVat)}</td>
+                      <td>{formatEUR(c.vatAmount)}</td>
+                      <td>{formatEUR(c.totalInclVat)}</td>
                     </tr>
                   ))}
                 </tbody>
