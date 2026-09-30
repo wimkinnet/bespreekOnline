@@ -45,6 +45,7 @@ export default function Assignments() {
           <option value="on_hold">On hold</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
+          <option value="invoiced">Invoiced</option>
         </select>
         <label className="checkbox-row">
           <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />

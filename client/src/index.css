@@ -397,6 +397,10 @@ tr.clickable:hover td {
   background: var(--accent-tint);
   color: var(--accent-dark);
 }
+.badge.status-invoiced {
+  background: #e6e3f1;
+  color: #4b3f86;
+}
 .badge.status-active {
   background: #e2eee7;
   color: #1f6e46;

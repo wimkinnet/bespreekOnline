@@ -51,10 +51,12 @@ async function validateFeeAmount(assignment, feeAmount, excludeEntryId) {
   return null;
 }
 
+const INVOICED_ASSIGNMENT_LOCKED = 'This assignment is invoiced; its time entries can no longer be changed.';
+
 // True when a fixed-fee assignment has its whole fee registered but is not marked completed yet,
 // so the client can offer to close it.
 async function fixedFeeFullyBilled(assignment) {
-  if (assignment.billingType !== 'fixed' || assignment.status === 'completed') return false;
+  if (assignment.billingType !== 'fixed' || ['completed', 'invoiced'].includes(assignment.status)) return false;
   const entries = await TimeEntry.find({ assignment: assignment._id }).select('amount');
   const billed = entries.reduce((sum, e) => sum + (e.amount || 0), 0);
   return billed >= assignment.rate - 0.005;
@@ -121,6 +123,9 @@ router.post('/', async (req, res) => {
     if (req.user.role !== 'admin' && !isAssigned) {
       return res.status(403).json({ message: 'You are not assigned to this assignment.' });
     }
+    if (assignment.status === 'invoiced') {
+      return res.status(400).json({ message: 'This assignment is invoiced; no more time can be logged on it.' });
+    }
 
     if (assignment.billingType === 'hourly' && !hours) {
       return res.status(400).json({ message: 'This assignment is billed hourly - enter hours.' });
@@ -183,6 +188,9 @@ router.put('/:id', async (req, res) => {
     if (entry.invoiced && req.user.role !== 'admin') {
       return res.status(400).json({ message: 'This entry has already been invoiced and can only be changed by an admin.' });
     }
+    if (entry.assignment.status === 'invoiced') {
+      return res.status(400).json({ message: INVOICED_ASSIGNMENT_LOCKED });
+    }
 
     const { date, hours, days, feeAmount, description, billable, includeTravel, travelKm, travelRate } = req.body;
     if (date !== undefined) entry.date = date;
@@ -233,13 +241,14 @@ router.put('/:id', async (req, res) => {
 // PUT /api/time-entries/:id/invoiced - admin marks entries as invoiced
 router.put('/:id/invoiced', requireRole('admin'), async (req, res) => {
   try {
-    const entry = await TimeEntry.findByIdAndUpdate(
-      req.params.id,
-      { invoiced: !!req.body.invoiced },
-      { new: true }
-    );
+    const entry = await TimeEntry.findById(req.params.id).populate('assignment', 'status');
     if (!entry) return res.status(404).json({ message: 'Time entry not found.' });
-    res.json(entry);
+    if (entry.assignment?.status === 'invoiced') {
+      return res.status(400).json({ message: INVOICED_ASSIGNMENT_LOCKED });
+    }
+    entry.invoiced = !!req.body.invoiced;
+    await entry.save();
+    res.json(entry.depopulate('assignment'));
   } catch (err) {
     res.status(400).json({ message: 'Could not update time entry.', error: err.message });
   }
@@ -248,12 +257,15 @@ router.put('/:id/invoiced', requireRole('admin'), async (req, res) => {
 // DELETE /api/time-entries/:id - owner (if not invoiced) or admin
 router.delete('/:id', async (req, res) => {
   try {
-    const entry = await TimeEntry.findById(req.params.id);
+    const entry = await TimeEntry.findById(req.params.id).populate('assignment', 'status');
     if (!entry) return res.status(404).json({ message: 'Time entry not found.' });
 
     const isOwner = entry.consultant.toString() === req.user._id.toString();
     if (req.user.role !== 'admin' && !isOwner) {
       return res.status(403).json({ message: 'You can only delete your own time entries.' });
+    }
+    if (entry.assignment?.status === 'invoiced') {
+      return res.status(400).json({ message: INVOICED_ASSIGNMENT_LOCKED });
     }
     if (entry.invoiced && req.user.role !== 'admin') {
       return res.status(400).json({ message: 'This entry has already been invoiced.' });

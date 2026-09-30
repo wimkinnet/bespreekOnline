@@ -76,7 +76,7 @@ export default function AssignmentDetail() {
   if (loading || !data) return <p className="muted">Loading…</p>;
   const { assignment, timeEntries, totals, documents } = data;
   const canLogTime = user.role === 'admin' || assignment.consultants.some((c) => c._id === user.id);
-  const closed = ['completed', 'cancelled'].includes(assignment.status);
+  const closed = ['completed', 'cancelled', 'invoiced'].includes(assignment.status);
 
   return (
     <div>
@@ -90,7 +90,7 @@ export default function AssignmentDetail() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span className={`badge status-${assignment.status}`}>{statusLabel(assignment.status)}</span>
-          {user.role === 'admin' && !editing && (
+          {user.role === 'admin' && !editing && assignment.status !== 'invoiced' && (
             <button className="btn btn-sm" onClick={() => setEditing(true)}>
               Edit
             </button>

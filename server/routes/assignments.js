@@ -71,11 +71,18 @@ router.post('/', requireRole('admin'), async (req, res) => {
 // PUT /api/assignments/:id - admin only (rate/billing changes shouldn't be casual)
 router.put('/:id', requireRole('admin'), async (req, res) => {
   try {
+    const existing = await Assignment.findById(req.params.id).select('status');
+    if (!existing) return res.status(404).json({ message: 'Assignment not found.' });
+    if (existing.status === 'invoiced') {
+      return res.status(400).json({ message: 'This assignment is invoiced and can no longer be changed.' });
+    }
+    if (req.body.status === 'invoiced') {
+      return res.status(400).json({ message: 'An assignment becomes invoiced by invoicing its time logs from Reports.' });
+    }
     const assignment = await Assignment.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
     });
-    if (!assignment) return res.status(404).json({ message: 'Assignment not found.' });
     res.json(assignment);
   } catch (err) {
     res.status(400).json({ message: 'Could not update assignment.', error: err.message });
@@ -87,6 +94,9 @@ router.put('/:id/complete', async (req, res) => {
   try {
     const assignment = await Assignment.findById(req.params.id);
     if (!assignment) return res.status(404).json({ message: 'Assignment not found.' });
+    if (assignment.status === 'invoiced') {
+      return res.status(400).json({ message: 'This assignment is already invoiced.' });
+    }
 
     if (req.user.role !== 'admin') {
       const isAssigned = assignment.consultants.some((c) => c.toString() === req.user._id.toString());

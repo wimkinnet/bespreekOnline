@@ -17,8 +17,9 @@ export default function TimeRegistration() {
       api.get('/assignments', { params: { ...params, status: undefined } }),
       api.get('/time-entries'),
     ]);
-    // Keep only assignments this consultant can actually log against; admins see all
-    setAssignments(assignmentsRes.data);
+    // Keep only assignments this consultant can actually log against; admins see all.
+    // Invoiced assignments are final, so no time can be logged on them anymore.
+    setAssignments(assignmentsRes.data.filter((a) => a.status !== 'invoiced'));
     setEntries(entriesRes.data);
     setLoading(false);
   }

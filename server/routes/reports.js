@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ExcelJS = require('exceljs');
 const TimeEntry = require('../models/TimeEntry');
+const Assignment = require('../models/Assignment');
 const { protect, requireRole } = require('../middleware/auth');
 
 router.use(protect, requireRole('admin'));
@@ -107,12 +108,54 @@ router.get('/summary', async (req, res) => {
     const grandTotal = byClient.reduce((sum, c) => sum + c.amount, 0);
     const travelTotal = byClient.reduce((sum, c) => sum + c.travelAmount, 0);
 
+    // What "Invoice period" would still mark as invoiced
+    const [toInvoice] = await TimeEntry.aggregate([
+      { $match: { ...match, invoiced: { $ne: true } } },
+      {
+        $group: {
+          _id: null,
+          entries: { $sum: 1 },
+          amount: { $sum: '$amount' },
+          travelAmount: { $sum: { $ifNull: ['$travelAmount', 0] } },
+        },
+      },
+    ]);
+
     const vatTotal = roundCents(byClient.reduce((sum, c) => sum + c.vatAmount, 0));
     const totalInclVat = roundCents(byClient.reduce((sum, c) => sum + c.totalInclVat, 0));
 
-    res.json({ byClient, byConsultant, byAssignment, grandTotal, travelTotal, vatRate: VAT_RATE, vatTotal, totalInclVat });
+    res.json({ byClient, byConsultant, byAssignment, grandTotal,
+      travelTotal,
+      vatRate: VAT_RATE,
+      vatTotal,
+      totalInclVat,
+      toInvoice: toInvoice || { entries: 0, amount: 0, travelAmount: 0 },
+    });
   } catch (err) {
     res.status(500).json({ message: 'Could not build report.', error: err.message });
+  }
+});
+
+// POST /api/reports/invoice { from, to }
+// Marks every time entry in the period as invoiced. Completed assignments that then have all
+// their entries invoiced move to the final status 'invoiced'.
+router.post('/invoice', async (req, res) => {
+  try {
+    const match = { ...dateMatch(req.body), invoiced: { $ne: true } };
+    const assignmentIds = await TimeEntry.distinct('assignment', match);
+    const { modifiedCount } = await TimeEntry.updateMany(match, { $set: { invoiced: true } });
+
+    const completed = await Assignment.find({ _id: { $in: assignmentIds }, status: 'completed' }).select('_id title');
+    const closed = [];
+    for (const assignment of completed) {
+      const open = await TimeEntry.exists({ assignment: assignment._id, invoiced: { $ne: true } });
+      if (!open) closed.push(assignment);
+    }
+    await Assignment.updateMany({ _id: { $in: closed.map((a) => a._id) } }, { $set: { status: 'invoiced' } });
+
+    res.json({ entriesInvoiced: modifiedCount, assignmentsInvoiced: closed.map((a) => a.title) });
+  } catch (err) {
+    res.status(500).json({ message: 'Could not invoice this period.', error: err.message });
   }
 });
 

@@ -16,13 +16,48 @@ export default function Reports() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [invoicing, setInvoicing] = useState(false);
+  const [loadedPeriod, setLoadedPeriod] = useState(null); // period the shown numbers belong to
 
   async function load() {
     setLoading(true);
     const { data } = await api.get('/reports/summary', { params: { from, to } });
     setReport(data);
+    setLoadedPeriod({ from, to });
     setLoading(false);
   }
+
+  // Confirm the shown numbers, then mark every time log of the period as invoiced
+  async function invoicePeriod() {
+    const { entries, amount, travelAmount } = report.toInvoice;
+    const exclVat = amount + travelAmount;
+    const ok = window.confirm(
+      `Invoice ${loadedPeriod.from} – ${loadedPeriod.to}?\n\n` +
+        `${entries} time log${entries === 1 ? '' : 's'} not yet invoiced\n` +
+        `Amount: ${formatEUR(amount)}\n` +
+        `Travel: ${formatEUR(travelAmount)}\n` +
+        `Total excl. VAT: ${formatEUR(exclVat)}\n` +
+        `Total incl. ${Math.round(report.vatRate * 100)}% VAT: ${formatEUR(exclVat * (1 + report.vatRate))}\n\n` +
+        'These logs will be marked as invoiced. Completed assignments with all logs invoiced become Invoiced, which is final.'
+    );
+    if (!ok) return;
+    setInvoicing(true);
+    try {
+      const { data } = await api.post('/reports/invoice', loadedPeriod);
+      const closed = data.assignmentsInvoiced;
+      alert(
+        `${data.entriesInvoiced} time log${data.entriesInvoiced === 1 ? '' : 's'} marked as invoiced.` +
+          (closed.length ? `\n\nAssignments now invoiced:\n- ${closed.join('\n- ')}` : '')
+      );
+      await load();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not invoice this period.');
+    } finally {
+      setInvoicing(false);
+    }
+  }
+
+  const periodChanged = loadedPeriod && (loadedPeriod.from !== from || loadedPeriod.to !== to);
 
   async function exportByClient() {
     setExporting(true);
@@ -70,6 +105,27 @@ export default function Reports() {
         <button className="btn" onClick={exportByClient} disabled={exporting}>
           {exporting ? 'Exporting…' : 'Export to Excel'}
         </button>
+        {report && (
+          <button
+            className="btn btn-primary"
+            style={{ marginLeft: 'auto' }}
+            onClick={invoicePeriod}
+            disabled={invoicing || loading || periodChanged || report.toInvoice.entries === 0}
+            title={
+              periodChanged
+                ? 'Click Update first so the numbers match the selected period.'
+                : report.toInvoice.entries === 0
+                  ? 'All time logs in this period are already invoiced.'
+                  : ''
+            }
+          >
+            {invoicing
+              ? 'Invoicing…'
+              : report.toInvoice.entries === 0
+                ? 'Period invoiced'
+                : `Validate & invoice (${report.toInvoice.entries})`}
+          </button>
+        )}
       </div>
 
       {report && (
