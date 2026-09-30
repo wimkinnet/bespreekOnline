@@ -33,7 +33,8 @@ async function computeTravel({ includeTravel, travelKm, travelRate }, consultant
   if (!Number.isFinite(rate) || rate < 0) {
     throw new DistanceError('Travel rate must be a positive amount per km.');
   }
-  return { travelIncluded: true, travelKm: km, travelRate: rate, travelAmount: Math.round(km * rate * 100) / 100 };
+  // Travel costs are rounded to the nearest whole euro
+  return { travelIncluded: true, travelKm: km, travelRate: rate, travelAmount: Math.round(km * rate) };
 }
 
 // A fixed fee is billed by registering (parts of) it; the registered total may not exceed the fee.

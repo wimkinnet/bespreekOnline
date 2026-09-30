@@ -87,7 +87,7 @@ async function travelForConsultant(consultant, client) {
     oneWayKm,
     roundTripKm,
     ratePerKm,
-    travelAmount: Math.round(roundTripKm * ratePerKm * 100) / 100,
+    travelAmount: Math.round(roundTripKm * ratePerKm), // rounded to the nearest whole euro
   };
 }
 

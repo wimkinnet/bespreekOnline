@@ -329,7 +329,7 @@ export default function TimeEntryForm({ assignments = [], assignment: lockedAssi
                   disabled
                   value={
                     form.travelKm !== '' && form.travelRate !== ''
-                      ? formatEUR(Number(form.travelKm) * Number(form.travelRate))
+                      ? formatEUR(Math.round(Number(form.travelKm) * Number(form.travelRate)))
                       : '—'
                   }
                 />
