@@ -82,6 +82,30 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
   }
 });
 
+// PUT /api/assignments/:id/complete - admin, or a staffed consultant once a fixed fee is fully billed
+router.put('/:id/complete', async (req, res) => {
+  try {
+    const assignment = await Assignment.findById(req.params.id);
+    if (!assignment) return res.status(404).json({ message: 'Assignment not found.' });
+
+    if (req.user.role !== 'admin') {
+      const isAssigned = assignment.consultants.some((c) => c.toString() === req.user._id.toString());
+      if (!isAssigned) return res.status(403).json({ message: 'You are not assigned to this assignment.' });
+      const entries = await TimeEntry.find({ assignment: assignment._id }).select('amount');
+      const billed = entries.reduce((sum, e) => sum + (e.amount || 0), 0);
+      if (assignment.billingType !== 'fixed' || billed < assignment.rate - 0.005) {
+        return res.status(403).json({ message: 'Only an admin can complete this assignment before its fixed fee is fully billed.' });
+      }
+    }
+
+    assignment.status = 'completed';
+    await assignment.save();
+    res.json(assignment);
+  } catch (err) {
+    res.status(400).json({ message: 'Could not complete assignment.', error: err.message });
+  }
+});
+
 // DELETE /api/assignments/:id - admin only, blocked if time entries exist
 router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {

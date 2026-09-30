@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import TimeEntryForm from '../components/TimeEntryForm';
 import { formatEUR, formatDate, billingTypeLabel, statusLabel, rateUnitLabel } from '../utils/format';
 
 export default function AssignmentDetail() {
@@ -17,8 +18,8 @@ export default function AssignmentDetail() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Refreshes in place after the first load, so logging time doesn't flash the whole page
   async function load() {
-    setLoading(true);
     const { data: res } = await api.get(`/assignments/${id}`);
     setData(res);
     setForm({
@@ -74,6 +75,8 @@ export default function AssignmentDetail() {
 
   if (loading || !data) return <p className="muted">Loading…</p>;
   const { assignment, timeEntries, totals, documents } = data;
+  const canLogTime = user.role === 'admin' || assignment.consultants.some((c) => c._id === user.id);
+  const closed = ['completed', 'cancelled'].includes(assignment.status);
 
   return (
     <div>
@@ -232,6 +235,13 @@ export default function AssignmentDetail() {
         <p className="muted" style={{ marginBottom: 18 }}>
           Staffed: {assignment.consultants.map((c) => c.name).join(', ')}
         </p>
+      )}
+
+      {canLogTime && !closed && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <h2>Log time</h2>
+          <TimeEntryForm assignment={assignment} onSaved={load} />
+        </div>
       )}
 
       <h2 style={{ marginBottom: 10 }}>Time entries</h2>

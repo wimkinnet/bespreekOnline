@@ -50,6 +50,15 @@ async function validateFeeAmount(assignment, feeAmount, excludeEntryId) {
   return null;
 }
 
+// True when a fixed-fee assignment has its whole fee registered but is not marked completed yet,
+// so the client can offer to close it.
+async function fixedFeeFullyBilled(assignment) {
+  if (assignment.billingType !== 'fixed' || assignment.status === 'completed') return false;
+  const entries = await TimeEntry.find({ assignment: assignment._id }).select('amount');
+  const billed = entries.reduce((sum, e) => sum + (e.amount || 0), 0);
+  return billed >= assignment.rate - 0.005;
+}
+
 // GET /api/time-entries?consultant=&assignment=&client=&from=&to=
 // Consultants only ever see their own entries; admins can see everyone's.
 router.get('/', async (req, res) => {
@@ -153,7 +162,7 @@ router.post('/', async (req, res) => {
       { path: 'client', select: 'name' },
     ]);
 
-    res.status(201).json(populated);
+    res.status(201).json({ ...populated.toObject(), assignmentFullyBilled: await fixedFeeFullyBilled(assignment) });
   } catch (err) {
     if (err instanceof DistanceError) return res.status(422).json({ message: err.message });
     res.status(400).json({ message: 'Could not save time entry.', error: err.message });
@@ -213,7 +222,7 @@ router.put('/:id', async (req, res) => {
     }
 
     await entry.save();
-    res.json(entry);
+    res.json({ ...entry.toObject(), assignmentFullyBilled: await fixedFeeFullyBilled(entry.assignment) });
   } catch (err) {
     if (err instanceof DistanceError) return res.status(422).json({ message: err.message });
     res.status(400).json({ message: 'Could not update time entry.', error: err.message });
