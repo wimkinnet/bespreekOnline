@@ -34,7 +34,7 @@ const emptyEntry = (assignment = '') => ({
 
 // "New entry" form, used on the Time registration page (pick any assignment) and on an
 // assignment's detail page (`assignment` given: the form is locked to that assignment).
-export default function TimeEntryForm({ assignments, assignment: lockedAssignment, onSaved }) {
+export default function TimeEntryForm({ assignments = [], assignment: lockedAssignment, onSaved }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedCount, setSavedCount] = useState(0); // refreshes the remaining fixed fee after each save
