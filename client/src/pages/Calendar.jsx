@@ -120,11 +120,9 @@ export default function Calendar() {
   }, [assignments, entries, today]);
 
   const days = monthGrid(month.year, month.month);
-  // Assignments running on a day, except those with a log that day: the log already represents them
-  const runningOn = (key) => {
-    const logged = new Set((logsByDay[key] || []).map((e) => e.assignment?._id));
-    return periods.filter((p) => p.start <= key && key <= p.end && !logged.has(p.id));
-  };
+  // Past days (up to today) show what was logged, future days the assignments that will be running
+  const logsOn = (key) => (key <= today ? logsByDay[key] || [] : []);
+  const runningOn = (key) => (key > today ? periods.filter((p) => p.start <= key && key <= p.end) : []);
 
   function shiftMonth(delta) {
     setMonth(({ year, month: m }) => {
@@ -142,19 +140,7 @@ export default function Calendar() {
     if (d.getMonth() !== month.month) setMonth({ year: d.getFullYear(), month: d.getMonth() });
   }
 
-  // Legend: every assignment with a log or a running day in the visible month
-  const monthStart = dayKey(new Date(month.year, month.month, 1));
-  const monthEnd = dayKey(new Date(month.year, month.month + 1, 0));
-  const legend = new Map();
-  for (const p of periods) {
-    if (p.start <= monthEnd && monthStart <= p.end) legend.set(p.id, p.assignment.title);
-  }
-  for (const [key, logs] of Object.entries(logsByDay)) {
-    if (key < monthStart || key > monthEnd) continue;
-    for (const e of logs) if (e.assignment) legend.set(e.assignment._id, e.assignment.title);
-  }
-
-  const dayLogs = logsByDay[selected] || [];
+  const dayLogs = logsOn(selected);
   const dayRunning = runningOn(selected);
   const dayHours = dayLogs.reduce((s, e) => s + (e.hours || 0), 0);
   const dayDays = dayLogs.reduce((s, e) => s + (e.days || 0), 0);
@@ -167,7 +153,7 @@ export default function Calendar() {
       <div className="page-header">
         <div>
           <h1>Calendar</h1>
-          <p>Days with logged time and the periods during which assignments run.</p>
+          <p>Logged time on past days, running assignments on upcoming days.</p>
         </div>
       </div>
 
@@ -197,7 +183,7 @@ export default function Calendar() {
               ))}
               {days.map((d) => {
                 const key = dayKey(d);
-                const logs = logsByDay[key] || [];
+                const logs = logsOn(key);
                 const running = runningOn(key);
                 const classes = ['calendar-day'];
                 if (d.getMonth() !== month.month) classes.push('outside');
@@ -235,22 +221,12 @@ export default function Calendar() {
                 <span className="calendar-stripe" style={{ width: 18 }} /> assignment running
               </span>
             </div>
-            {legend.size > 0 && (
-              <div className="calendar-legend">
-                {[...legend].map(([id, title]) => (
-                  <span key={id}>
-                    <span className="calendar-swatch" style={{ background: colours[id] }} />
-                    {title}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="card calendar-details">
             <h2>{keyLabel(selected)}</h2>
             {dayLogs.length === 0 && dayRunning.length === 0 && (
-              <p className="muted">Nothing logged and no assignments running on this day.</p>
+              <p className="muted">{selected <= today ? 'No time logged on this day.' : 'No assignments running on this day.'}</p>
             )}
 
             {dayLogs.length > 0 && (

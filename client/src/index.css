@@ -523,24 +523,6 @@ tr.clickable:hover td {
   align-items: center;
   gap: 6px;
 }
-.calendar-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  margin-top: 8px;
-  font-size: 12.5px;
-}
-.calendar-legend > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.calendar-swatch {
-  width: 11px;
-  height: 11px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
 .calendar-card + .calendar-details {
   margin-top: 0;
   position: sticky;
