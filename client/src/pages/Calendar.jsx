@@ -120,7 +120,11 @@ export default function Calendar() {
   }, [assignments, entries, today]);
 
   const days = monthGrid(month.year, month.month);
-  const runningOn = (key) => periods.filter((p) => p.start <= key && key <= p.end);
+  // Assignments running on a day, except those with a log that day: the log already represents them
+  const runningOn = (key) => {
+    const logged = new Set((logsByDay[key] || []).map((e) => e.assignment?._id));
+    return periods.filter((p) => p.start <= key && key <= p.end && !logged.has(p.id));
+  };
 
   function shiftMonth(delta) {
     setMonth(({ year, month: m }) => {
