@@ -9,6 +9,7 @@ import ClientDetail from './pages/ClientDetail';
 import Assignments from './pages/Assignments';
 import AssignmentDetail from './pages/AssignmentDetail';
 import TimeRegistration from './pages/TimeRegistration';
+import Calendar from './pages/Calendar';
 import Consultants from './pages/Consultants';
 import Reports from './pages/Reports';
 
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="assignments" element={<Assignments />} />
           <Route path="assignments/:id" element={<AssignmentDetail />} />
           <Route path="time" element={<TimeRegistration />} />
+          <Route path="calendar" element={<Calendar />} />
           <Route
             path="reports"
             element={

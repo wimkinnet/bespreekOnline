@@ -31,6 +31,9 @@ export default function Layout() {
           <NavLink to="/time" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
             Time registration
           </NavLink>
+          <NavLink to="/calendar" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+            Calendar
+          </NavLink>
           {user?.role === 'admin' && (
             <>
               <NavLink to="/reports" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
