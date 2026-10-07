@@ -859,7 +859,7 @@ tr.clickable:hover td {
     margin-left: 0 !important;
   }
 
-  .filter-bar input,
+  .filter-bar input:not([type='checkbox']):not([type='radio']),
   .filter-bar select {
     width: 100%;
   }
