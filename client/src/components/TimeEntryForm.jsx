@@ -148,6 +148,15 @@ export default function TimeEntryForm({ assignments = [], assignment: lockedAssi
         <form onSubmit={handleSubmit}>
           <div className="field-row">
             <div className="field">
+              <label>Date</label>
+              <input
+                type="date"
+                required
+                value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value })}
+              />
+            </div>
+            <div className="field">
               <label>Assignment</label>
               {lockedAssignment ? (
                 <input
@@ -192,15 +201,6 @@ export default function TimeEntryForm({ assignments = [], assignment: lockedAssi
                   This date is outside the assignment period ({periodLabel(selectedAssignment)}).
                 </div>
               )}
-            </div>
-            <div className="field">
-              <label>Date</label>
-              <input
-                type="date"
-                required
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-              />
             </div>
           </div>
 
