@@ -1,9 +1,17 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Close the mobile menu whenever the route changes
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
 
   function handleLogout() {
     logout();
@@ -11,10 +19,32 @@ export default function Layout() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={'app-shell' + (menuOpen ? ' menu-open' : '')}>
+      <header className="mobile-topbar">
+        <button
+          className="menu-toggle"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+        <div className="brand">
+          <img className="brand-logo" src="/logo.png" alt="" />
+          bespreek
+        </div>
+      </header>
+
+      <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} />
+
       <aside className="sidebar">
         <div className="brand">
-          bespreek
+          <div className="brand-name">
+            <img className="brand-logo" src="/logo.png" alt="" />
+            bespreek
+          </div>
           <span>School &amp; Scholen Groep advies</span>
         </div>
 

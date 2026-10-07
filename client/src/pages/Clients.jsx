@@ -67,7 +67,7 @@ export default function Clients() {
         )}
       </div>
 
-      <div className="card" style={{ marginBottom: 16, display: 'flex', gap: 12 }}>
+      <div className="card filter-bar" style={{ marginBottom: 16, display: 'flex', gap: 12 }}>
         <input
           placeholder="Search by name…"
           value={search}

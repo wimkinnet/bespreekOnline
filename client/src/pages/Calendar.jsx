@@ -6,8 +6,8 @@ import { formatEUR, formatDate, statusLabel } from '../utils/format';
 
 // One colour per assignment; logs take the colour of their assignment
 const PALETTE = [
-  '#3f6659', '#c0612b', '#3b6fb6', '#a9832f', '#8e4a8f', '#c23b5a',
-  '#2f9a9a', '#6b8e23', '#7a5c3e', '#5a5fd6', '#d08a1e', '#6d7a72',
+  '#00807d', '#c0612b', '#3b6fb6', '#a9832f', '#8e4a8f', '#c23b5a',
+  '#2e7d32', '#6b8e23', '#7a5c3e', '#5a5fd6', '#d08a1e', '#6d7a72',
 ];
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 // Statuses during which an assignment is not actually running

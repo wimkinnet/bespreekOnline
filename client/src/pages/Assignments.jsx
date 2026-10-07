@@ -33,7 +33,7 @@ export default function Assignments() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 16, display: 'flex', gap: 14, alignItems: 'center' }}>
+      <div className="card filter-bar" style={{ marginBottom: 16, display: 'flex', gap: 14, alignItems: 'center' }}>
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}

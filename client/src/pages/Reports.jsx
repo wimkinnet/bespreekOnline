@@ -90,7 +90,7 @@ export default function Reports() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 18, display: 'flex', gap: 12, alignItems: 'flex-end' }}>
+      <div className="card filter-bar" style={{ marginBottom: 18, display: 'flex', gap: 12, alignItems: 'flex-end' }}>
         <div className="field" style={{ marginBottom: 0 }}>
           <label>From</label>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
