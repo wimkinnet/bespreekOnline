@@ -66,6 +66,7 @@ export default function TimeRegistration() {
                 <th>Amount</th>
                 <th>Travel</th>
                 <th>Billable</th>
+                <th>Invoiced</th>
                 <th></th>
               </tr>
             </thead>
@@ -79,6 +80,7 @@ export default function TimeRegistration() {
                   <td>{formatEUR(e.amount)}</td>
                   <td>{e.travelIncluded ? `${e.travelKm} km × ${formatEUR(e.travelRate)} = ${formatEUR(e.travelAmount)}` : '—'}</td>
                   <td>{e.billable ? 'Yes' : 'No'}</td>
+                  <td>{e.invoiced ? 'Yes' : 'No'}</td>
                   <td style={{ textAlign: 'right' }}>
                     {!e.invoiced && (
                       <button className="btn btn-sm btn-danger" onClick={() => handleDelete(e._id)}>
