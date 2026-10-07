@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -7,11 +7,35 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const mainRef = useRef(null);
 
   // Close the mobile menu whenever the route changes
   useEffect(() => {
     setMenuOpen(false);
   }, [location.pathname]);
+
+  // Tag every table cell with its column name, so on narrow portrait screens
+  // the rows can be shown as stacked "label: value" blocks (see index.css)
+  useEffect(() => {
+    const main = mainRef.current;
+    function labelCells() {
+      main.querySelectorAll('table').forEach((table) => {
+        const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+        table.querySelectorAll('tbody tr').forEach((tr) => {
+          let col = 0;
+          [...tr.children].forEach((td) => {
+            const label = td.colSpan === 1 ? heads[col] || '' : '';
+            if (td.dataset.label !== label) td.dataset.label = label;
+            col += td.colSpan;
+          });
+        });
+      });
+    }
+    labelCells();
+    const observer = new MutationObserver(labelCells);
+    observer.observe(main, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, []);
 
   function handleLogout() {
     logout();
@@ -87,7 +111,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <main className="main">
+      <main className="main" ref={mainRef}>
         <Outlet />
       </main>
     </div>

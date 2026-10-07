@@ -912,3 +912,133 @@ tr.clickable:hover td {
     padding: 26px 20px;
   }
 }
+
+/* Portrait phones: tables become stacked rows of "label: value" */
+@media (max-width: 600px) {
+  body {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  h2 {
+    font-size: 17px;
+  }
+
+  .main {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .page-header > * {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .stat .label {
+    font-size: 11px;
+  }
+
+  .stat .value {
+    font-size: 18px;
+  }
+
+  .table-wrap,
+  .card:has(> table) {
+    overflow-x: visible;
+  }
+
+  .table-wrap table,
+  .card > table {
+    min-width: 0;
+  }
+
+  table thead {
+    display: none;
+  }
+
+  table,
+  tbody,
+  tr,
+  td {
+    display: block;
+    width: 100%;
+  }
+
+  tr {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tr:last-child {
+    border-bottom: none;
+  }
+
+  tr.clickable:hover {
+    background: var(--accent-tint);
+  }
+
+  tr.clickable:hover td {
+    background: none;
+  }
+
+  td {
+    padding: 2px 0;
+    border: none;
+    font-size: 13px;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  td::before {
+    content: attr(data-label);
+    float: left;
+    margin-right: 12px;
+    color: var(--ink-soft);
+    font-size: 12px;
+    font-weight: 500;
+    text-align: left;
+  }
+
+  td[data-label='']::before,
+  td:not([data-label])::before,
+  td:first-child::before {
+    content: none;
+  }
+
+  /* The first column is the row's title */
+  td:first-child {
+    text-align: left;
+    font-size: 14px;
+    font-weight: 600;
+    padding-bottom: 4px;
+  }
+
+  td[colspan] {
+    text-align: center;
+    font-weight: 400;
+  }
+
+  td:empty {
+    display: none;
+  }
+
+  .calendar-day {
+    min-height: 42px;
+    padding: 2px;
+  }
+
+  .calendar-date {
+    font-size: 11.5px;
+  }
+
+  .calendar-toolbar {
+    gap: 6px;
+  }
+
+  .calendar-toolbar h2 {
+    font-size: 15px;
+  }
+}
