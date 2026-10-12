@@ -148,16 +148,20 @@ module.exports = function renderTravelClaimPdf(claim, stream) {
     y = doc.y + 5;
   }
 
-  // Signatures
-  y += 18;
-  const sign = (title, name, x) => {
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(title, x, y, { width: colW });
-    doc.font('Helvetica').fontSize(9).fillColor(SOFT).text(name, x, y + 13, { width: colW });
-    doc.text('Datum:', x, y + 34).text('Handtekening:', x, y + 52);
-    doc.moveTo(x + 70, y + 62).lineTo(x + colW, y + 62).lineWidth(0.5).strokeColor(SOFT).stroke();
-  };
-  sign('Voor echt en waar verklaard', claim.beneficiary.name, left);
-  sign(`Goedgekeurd voor ${claim.company.name}`, 'Naam:', left + width / 2 + 10);
+  // Approval recorded in the app, instead of handwritten signatures
+  y += 14;
+  doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.5).strokeColor(LINE).stroke();
+  y += 10;
+  doc.font('Helvetica').fontSize(9).fillColor(SOFT).text(
+    `Verplaatsingen geregistreerd door ${claim.beneficiary.name} in de tijdsregistratie van ${claim.company.name}.`,
+    left,
+    y,
+    { width }
+  );
+  doc.font('Helvetica-Bold').fillColor(INK).text(
+    `Opgesteld en goedgekeurd door ${claim.approvedByName || claim.company.name} op ${day(claim.issueDate)}.`,
+    { width }
+  );
 
   // Page numbers
   const range = doc.bufferedPageRange();

@@ -46,6 +46,7 @@ const travelClaimSchema = new mongoose.Schema(
     totalKm: Number,
     totalAmount: Number,
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    approvedByName: String, // the admin who issued the claim; printed as the approval instead of a signature
   },
   { timestamps: true }
 );

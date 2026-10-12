@@ -150,6 +150,7 @@ router.post('/', async (req, res) => {
       totalKm: claim.totalKm,
       totalAmount: claim.totalAmount,
       createdBy: req.user._id,
+      approvedByName: req.user.name,
     });
 
     await TimeEntry.updateMany(
