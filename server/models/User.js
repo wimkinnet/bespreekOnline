@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema(
       city: { type: String, trim: true },
       country: { type: String, default: 'Belgium' },
     },
+    iban: { type: String, trim: true }, // bank account for reimbursing expense claims
   },
   { timestamps: true }
 );
@@ -41,6 +42,7 @@ userSchema.methods.toSafeObject = function () {
     active: this.active,
     phone: this.phone,
     homeAddress: this.homeAddress,
+    iban: this.iban,
     createdAt: this.createdAt,
   };
 };

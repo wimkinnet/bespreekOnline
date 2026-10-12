@@ -12,6 +12,8 @@ const timeEntryRoutes = require('./routes/timeEntries');
 const documentRoutes = require('./routes/documents');
 const reportRoutes = require('./routes/reports');
 const distanceRoutes = require('./routes/distance');
+const settingsRoutes = require('./routes/settings');
+const travelClaimRoutes = require('./routes/travelClaims');
 
 const app = express();
 
@@ -28,6 +30,8 @@ app.use('/api/time-entries', timeEntryRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/distance', distanceRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/travel-claims', travelClaimRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

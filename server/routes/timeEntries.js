@@ -52,6 +52,8 @@ async function validateFeeAmount(assignment, feeAmount, excludeEntryId) {
 }
 
 const INVOICED_ASSIGNMENT_LOCKED = 'This assignment is invoiced; its time entries can no longer be changed.';
+const TRAVEL_CLAIMED_LOCKED =
+  'The travel of this entry is on an expense claim; its date and travel can no longer be changed and it cannot be deleted.';
 
 // True when a fixed-fee assignment has its whole fee registered but is not marked completed yet,
 // so the client can offer to close it.
@@ -193,6 +195,10 @@ router.put('/:id', async (req, res) => {
     }
 
     const { date, hours, days, feeAmount, description, billable, includeTravel, travelKm, travelRate } = req.body;
+    const travelChanged = [date, includeTravel, travelKm, travelRate].some((v) => v !== undefined);
+    if (entry.travelClaim && travelChanged) {
+      return res.status(400).json({ message: TRAVEL_CLAIMED_LOCKED });
+    }
     if (date !== undefined) entry.date = date;
     if (description !== undefined) entry.description = description;
     if (billable !== undefined) entry.billable = billable;
@@ -269,6 +275,9 @@ router.delete('/:id', async (req, res) => {
     }
     if (entry.invoiced && req.user.role !== 'admin') {
       return res.status(400).json({ message: 'This entry has already been invoiced.' });
+    }
+    if (entry.travelClaim) {
+      return res.status(400).json({ message: TRAVEL_CLAIMED_LOCKED });
     }
 
     await entry.deleteOne();

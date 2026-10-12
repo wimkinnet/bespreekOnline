@@ -626,6 +626,10 @@ input[type='date']::-webkit-date-and-time-value {
   box-shadow: 0 8px 30px rgba(20, 48, 47, 0.18);
 }
 
+.modal-wide {
+  max-width: 760px;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;

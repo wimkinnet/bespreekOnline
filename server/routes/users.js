@@ -47,7 +47,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
 // PUT /api/users/:id - update a user (admin only)
 router.put('/:id', requireRole('admin'), async (req, res) => {
   try {
-    const { name, role, phone, hourlyCost, homeAddress, active, password } = req.body;
+    const { name, role, phone, hourlyCost, homeAddress, iban, active, password } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: 'User not found.' });
 
@@ -56,6 +56,7 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     if (phone !== undefined) user.phone = phone;
     if (hourlyCost !== undefined) user.hourlyCost = hourlyCost;
     if (homeAddress !== undefined) user.homeAddress = homeAddress;
+    if (iban !== undefined) user.iban = iban;
     if (active !== undefined) user.active = active;
     if (password) user.password = password;
 

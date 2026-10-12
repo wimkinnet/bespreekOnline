@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { formatEUR, billingTypeLabel } from '../utils/format';
+import TravelClaimModal from '../components/TravelClaimModal';
 
 function firstOfMonth() {
   const d = new Date();
@@ -18,6 +19,7 @@ export default function Reports() {
   const [exporting, setExporting] = useState(false);
   const [invoicing, setInvoicing] = useState(false);
   const [loadedPeriod, setLoadedPeriod] = useState(null); // period the shown numbers belong to
+  const [claimFor, setClaimFor] = useState(null); // consultant row whose km expense claim is open
 
   async function load() {
     setLoading(true);
@@ -197,6 +199,7 @@ export default function Reports() {
                     <th>Entries</th>
                     <th>Amount</th>
                     <th>Travel</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -208,6 +211,20 @@ export default function Reports() {
                       <td>{c.entries}</td>
                       <td>{formatEUR(c.amount)}</td>
                       <td>{formatEUR(c.travelAmount)}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => setClaimFor(c)}
+                          disabled={periodChanged}
+                          title={
+                            periodChanged
+                              ? 'Click Update first so the claim matches the selected period.'
+                              : 'Expense claim for the km driven, at the official km rate'
+                          }
+                        >
+                          Km claim
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -245,6 +262,16 @@ export default function Reports() {
             )}
           </div>
         </>
+      )}
+
+      {claimFor && (
+        <TravelClaimModal
+          consultantId={claimFor._id}
+          consultantName={claimFor.consultantName}
+          from={loadedPeriod.from}
+          to={loadedPeriod.to}
+          onClose={() => setClaimFor(null)}
+        />
       )}
     </div>
   );
