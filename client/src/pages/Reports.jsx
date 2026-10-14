@@ -31,15 +31,15 @@ export default function Reports() {
 
   // Confirm the shown numbers, then mark every time log of the period as invoiced
   async function invoicePeriod() {
-    const { entries, amount, travelAmount } = report.toInvoice;
-    const exclVat = amount + travelAmount;
+    const { entries, amount, travelAmount, totalExclVat, vatAmount, totalInclVat } = report.toInvoice;
     const ok = window.confirm(
       `Invoice ${loadedPeriod.from} – ${loadedPeriod.to}?\n\n` +
         `${entries} time log${entries === 1 ? '' : 's'} not yet invoiced\n` +
         `Amount: ${formatEUR(amount)}\n` +
         `Travel: ${formatEUR(travelAmount)}\n` +
-        `Total excl. VAT: ${formatEUR(exclVat)}\n` +
-        `Total incl. ${Math.round(report.vatRate * 100)}% VAT: ${formatEUR(exclVat * (1 + report.vatRate))}\n\n` +
+        `Total excl. VAT: ${formatEUR(totalExclVat)}\n` +
+        `VAT ${Math.round(report.vatRate * 100)}%: ${formatEUR(vatAmount)}\n` +
+        `Total incl. VAT: ${formatEUR(totalInclVat)}\n\n` +
         'These logs will be marked as invoiced. Completed assignments with all logs invoiced become Invoiced, which is final.'
     );
     if (!ok) return;
@@ -142,7 +142,7 @@ export default function Reports() {
               <div className="value">{formatEUR(report.travelTotal)}</div>
             </div>
             <div className="stat">
-              <div className="label">Total incl. {Math.round(report.vatRate * 100)}% VAT</div>
+              <div className="label">Total incl. VAT</div>
               <div className="value">{formatEUR(report.totalInclVat)}</div>
             </div>
           </div>
@@ -176,7 +176,7 @@ export default function Reports() {
                       <td>{formatEUR(c.amount)}</td>
                       <td>{formatEUR(c.travelAmount)}</td>
                       <td>{formatEUR(c.totalExclVat)}</td>
-                      <td>{formatEUR(c.vatAmount)}</td>
+                      <td>{c.vatExempt ? <span className="muted">No VAT</span> : formatEUR(c.vatAmount)}</td>
                       <td>{formatEUR(c.totalInclVat)}</td>
                     </tr>
                   ))}

@@ -14,6 +14,8 @@ const clientSchema = new mongoose.Schema(
       country: { type: String, default: 'Belgium' },
     },
     vatNumber: { type: String, trim: true },
+    // Foreign client: invoiced without Belgian VAT (reverse charge)
+    vatExempt: { type: Boolean, default: false },
     contactName: { type: String, trim: true },
     contactEmail: { type: String, trim: true },
     contactPhone: { type: String, trim: true },

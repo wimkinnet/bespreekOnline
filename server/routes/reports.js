@@ -23,7 +23,7 @@ function dateMatch({ from, to }) {
   return match;
 }
 
-// Totals per client, with VAT applied to the amount plus travel costs
+// Totals per client, with VAT applied to the amount plus travel costs (none for VAT-exempt foreign clients)
 async function totalsByClient(match) {
   const rows = await TimeEntry.aggregate([
     { $match: match },
@@ -39,12 +39,22 @@ async function totalsByClient(match) {
     },
     { $lookup: { from: 'clients', localField: '_id', foreignField: '_id', as: 'client' } },
     { $unwind: '$client' },
-    { $project: { clientName: '$client.name', hours: 1, days: 1, amount: 1, travelAmount: 1, entries: 1 } },
+    {
+      $project: {
+        clientName: '$client.name',
+        vatExempt: { $ifNull: ['$client.vatExempt', false] },
+        hours: 1,
+        days: 1,
+        amount: 1,
+        travelAmount: 1,
+        entries: 1,
+      },
+    },
     { $sort: { amount: -1 } },
   ]);
   return rows.map((c) => {
     const totalExclVat = roundCents(c.amount + c.travelAmount);
-    const vatAmount = roundCents(totalExclVat * VAT_RATE);
+    const vatAmount = c.vatExempt ? 0 : roundCents(totalExclVat * VAT_RATE);
     return { ...c, totalExclVat, vatAmount, totalInclVat: roundCents(totalExclVat + vatAmount) };
   });
 }
@@ -109,27 +119,26 @@ router.get('/summary', async (req, res) => {
     const travelTotal = byClient.reduce((sum, c) => sum + c.travelAmount, 0);
 
     // What "Invoice period" would still mark as invoiced
-    const [toInvoice] = await TimeEntry.aggregate([
-      { $match: { ...match, invoiced: { $ne: true } } },
-      {
-        $group: {
-          _id: null,
-          entries: { $sum: 1 },
-          amount: { $sum: '$amount' },
-          travelAmount: { $sum: { $ifNull: ['$travelAmount', 0] } },
-        },
-      },
-    ]);
+    const toInvoiceByClient = await totalsByClient({ ...match, invoiced: { $ne: true } });
+    const sumOf = (rows, key) => roundCents(rows.reduce((sum, c) => sum + c[key], 0));
+    const toInvoice = {
+      entries: sumOf(toInvoiceByClient, 'entries'),
+      amount: sumOf(toInvoiceByClient, 'amount'),
+      travelAmount: sumOf(toInvoiceByClient, 'travelAmount'),
+      totalExclVat: sumOf(toInvoiceByClient, 'totalExclVat'),
+      vatAmount: sumOf(toInvoiceByClient, 'vatAmount'),
+      totalInclVat: sumOf(toInvoiceByClient, 'totalInclVat'),
+    };
 
-    const vatTotal = roundCents(byClient.reduce((sum, c) => sum + c.vatAmount, 0));
-    const totalInclVat = roundCents(byClient.reduce((sum, c) => sum + c.totalInclVat, 0));
+    const vatTotal = sumOf(byClient, 'vatAmount');
+    const totalInclVat = sumOf(byClient, 'totalInclVat');
 
     res.json({ byClient, byConsultant, byAssignment, grandTotal,
       travelTotal,
       vatRate: VAT_RATE,
       vatTotal,
       totalInclVat,
-      toInvoice: toInvoice || { entries: 0, amount: 0, travelAmount: 0 },
+      toInvoice,
     });
   } catch (err) {
     res.status(500).json({ message: 'Could not build report.', error: err.message });
@@ -184,7 +193,8 @@ router.get('/by-client.xlsx', async (req, res) => {
 
     for (const c of rows) {
       sheet.addRow([
-        c.clientName, c.hours, c.days, c.entries, c.amount, c.travelAmount, c.totalExclVat, c.vatAmount, c.totalInclVat,
+        c.vatExempt ? `${c.clientName} (no VAT)` : c.clientName,
+        c.hours, c.days, c.entries, c.amount, c.travelAmount, c.totalExclVat, c.vatAmount, c.totalInclVat,
       ]);
     }
 

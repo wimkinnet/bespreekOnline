@@ -244,6 +244,7 @@ export default function ClientDetail() {
             </p>
             <p className="muted" style={{ marginBottom: 0 }}>
               VAT: {client.vatNumber || '—'}
+              {client.vatExempt && ' · invoiced without VAT (foreign client)'}
             </p>
           </div>
         </div>

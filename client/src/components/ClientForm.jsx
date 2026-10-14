@@ -8,6 +8,7 @@ export const emptyClientForm = {
   contactEmail: '',
   contactPhone: '',
   vatNumber: '',
+  vatExempt: false,
   street: '',
   postalCode: '',
   city: '',
@@ -25,6 +26,7 @@ export function clientToForm(client) {
     contactEmail: client.contactEmail || '',
     contactPhone: client.contactPhone || '',
     vatNumber: client.vatNumber || '',
+    vatExempt: !!client.vatExempt,
     street: client.address?.street || '',
     postalCode: client.address?.postalCode || '',
     city: client.address?.city || '',
@@ -44,6 +46,7 @@ export function formToPayload(form) {
     contactEmail: form.contactEmail,
     contactPhone: form.contactPhone,
     vatNumber: form.vatNumber,
+    vatExempt: form.vatExempt,
     notes: form.notes,
     address: { street: form.street, postalCode: form.postalCode, city: form.city },
   };
@@ -122,6 +125,14 @@ export default function ClientForm({ initial = emptyClientForm, groups, excludeI
           <input value={form.vatNumber} onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} />
         </div>
       </div>
+      <label className="checkbox-row" style={{ marginBottom: 14 }}>
+        <input
+          type="checkbox"
+          checked={form.vatExempt}
+          onChange={(e) => setForm({ ...form, vatExempt: e.target.checked })}
+        />
+        Foreign client: invoice without VAT
+      </label>
       <div className="field">
         <label>Street & number</label>
         <input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} />
