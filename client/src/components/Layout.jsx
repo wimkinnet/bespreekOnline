@@ -44,6 +44,7 @@ export default function Layout() {
 
   return (
     <div className={'app-shell' + (menuOpen ? ' menu-open' : '')}>
+      {import.meta.env.VITE_TEST_ENV && <div className="test-env-banner">Test environment: dummy data</div>}
       <header className="mobile-topbar">
         <button
           className="menu-toggle"

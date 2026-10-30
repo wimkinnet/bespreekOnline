@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+const COUNTRIES = ['Belgium', 'Netherlands', 'Germany', 'France', 'Luxembourg', 'United Kingdom'];
+
 export const emptyClientForm = {
   name: '',
   type: 'school',
@@ -12,6 +14,7 @@ export const emptyClientForm = {
   street: '',
   postalCode: '',
   city: '',
+  country: 'Belgium',
   status: 'active',
   notes: '',
 };
@@ -30,6 +33,7 @@ export function clientToForm(client) {
     street: client.address?.street || '',
     postalCode: client.address?.postalCode || '',
     city: client.address?.city || '',
+    country: client.address?.country || 'Belgium',
     status: client.status || 'active',
     notes: client.notes || '',
   };
@@ -48,7 +52,7 @@ export function formToPayload(form) {
     vatNumber: form.vatNumber,
     vatExempt: form.vatExempt,
     notes: form.notes,
-    address: { street: form.street, postalCode: form.postalCode, city: form.city },
+    address: { street: form.street, postalCode: form.postalCode, city: form.city, country: form.country },
   };
 }
 
@@ -145,6 +149,17 @@ export default function ClientForm({ initial = emptyClientForm, groups, excludeI
         <div className="field">
           <label>City</label>
           <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+        </div>
+        <div className="field">
+          <label>Country</label>
+          <select value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })}>
+            {COUNTRIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+            {!COUNTRIES.includes(form.country) && <option value={form.country}>{form.country}</option>}
+          </select>
         </div>
       </div>
       <div className="field">

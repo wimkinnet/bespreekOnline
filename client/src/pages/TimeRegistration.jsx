@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import { formatEUR, formatDate } from '../utils/format';
+import { formatEUR, formatDate, travelLabel } from '../utils/format';
 import TimeEntryForm, { entryLockReason } from '../components/TimeEntryForm';
 import TimeEntryEditModal from '../components/TimeEntryEditModal';
 
@@ -80,7 +80,7 @@ export default function TimeRegistration() {
                   <td>{e.assignment?.title}</td>
                   <td>{e.hours ? `${e.hours} h` : e.days ? `${e.days} d` : '—'}</td>
                   <td>{formatEUR(e.amount)}</td>
-                  <td>{e.travelIncluded ? `${e.travelKm} km × ${formatEUR(e.travelRate)} = ${formatEUR(e.travelAmount)}` : '—'}</td>
+                  <td>{travelLabel(e)}</td>
                   <td>{e.billable ? 'Yes' : 'No'}</td>
                   <td>{e.invoiced ? 'Yes' : 'No'}</td>
                   <td style={{ textAlign: 'right' }}>

@@ -28,8 +28,11 @@ const emptyEntry = (assignment = '') => ({
   description: '',
   billable: true,
   includeTravel: null,
+  travelType: 'km',
   travelKm: '',
   travelRate: DEFAULT_TRAVEL_RATE,
+  travelAmount: '',
+  travelNote: '',
 });
 
 // Flatten a time entry from the API into form values
@@ -44,8 +47,11 @@ function entryToForm(entry) {
     description: entry.description || '',
     billable: entry.billable,
     includeTravel: entry.travelIncluded || entry.travelAmount > 0,
+    travelType: entry.travelType || 'km',
     travelKm: entry.travelKm ? String(entry.travelKm) : '',
     travelRate: entry.travelRate !== undefined ? String(entry.travelRate) : DEFAULT_TRAVEL_RATE,
+    travelAmount: entry.travelType === 'other' ? String(entry.travelAmount) : '',
+    travelNote: entry.travelNote || '',
   };
 }
 
@@ -66,7 +72,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
     ? { ...entry.assignment, client: entry.client, billingType: entry.billingType, rate: entry.rateApplied }
     : assignment;
   // Old entries can have a travel amount without km; it stays as it is unless km are entered
-  const legacyTravel = entry?.travelAmount > 0 && !entry.travelKm;
+  const legacyTravel = entry?.travelAmount > 0 && !entry.travelKm && entry.travelType !== 'other';
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedCount, setSavedCount] = useState(0); // refreshes the remaining fixed fee after each save
@@ -104,7 +110,8 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
   // (when editing, from the entry's consultant, and never over the km already saved on the entry)
   const clientId = selectedAssignment?.client?._id;
   useEffect(() => {
-    if (!form.includeTravel || !clientId || legacyTravel || (entry && form.travelKm !== '')) return;
+    if (!form.includeTravel || form.travelType !== 'km' || !clientId || legacyTravel) return;
+    if (entry && form.travelKm !== '') return;
     let cancelled = false;
     setTravel(null);
     setTravelError('');
@@ -126,7 +133,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.includeTravel, clientId]);
+  }, [form.includeTravel, form.travelType, clientId]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -145,11 +152,18 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
       const travelChanged =
         !saved ||
         form.includeTravel !== saved.includeTravel ||
+        form.travelType !== saved.travelType ||
         form.travelKm !== saved.travelKm ||
-        form.travelRate !== saved.travelRate;
+        form.travelRate !== saved.travelRate ||
+        form.travelAmount !== saved.travelAmount ||
+        form.travelNote !== saved.travelNote;
       if (travelChanged) {
         payload.includeTravel = form.includeTravel;
-        if (form.includeTravel) {
+        payload.travelType = form.travelType;
+        if (form.includeTravel && form.travelType === 'other') {
+          payload.travelAmount = Number(form.travelAmount);
+          payload.travelNote = form.travelNote;
+        } else if (form.includeTravel) {
           if (form.travelKm !== '') payload.travelKm = Number(form.travelKm);
           payload.travelRate = Number(form.travelRate);
         }
@@ -261,7 +275,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
                   {selectedAssignment.billingType === 'hourly'
                     ? 'Hours worked'
                     : selectedAssignment.billingType === 'daily'
-                      ? 'Days worked'
+                      ? 'Days worked (0.25 = a quarter of a day)'
                       : selectedAssignment.billingType === 'half_day'
                         ? 'Days worked (0.5 = one half day)'
                         : 'Hours worked (optional, for tracking)'}
@@ -269,7 +283,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
                 <input
                   type="number"
                   min="0"
-                  step={['hourly', 'fixed'].includes(selectedAssignment.billingType) ? '0.25' : '0.5'}
+                  step={selectedAssignment.billingType === 'half_day' ? '0.5' : '0.25'}
                   required={selectedAssignment.billingType !== 'fixed'}
                   value={form.amountValue}
                   onChange={(e) => setForm({ ...form, amountValue: e.target.value })}
@@ -333,6 +347,57 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
           )}
 
           {selectedAssignment && form.includeTravel && (
+            <div className="field">
+              <label>Type of travel costs</label>
+              <div style={{ display: 'flex', gap: 18 }}>
+                <label className="checkbox-row" style={{ margin: 0 }}>
+                  <input
+                    type="radio"
+                    name="travelType"
+                    checked={form.travelType === 'km'}
+                    onChange={() => setForm({ ...form, travelType: 'km' })}
+                  />
+                  Km
+                </label>
+                <label className="checkbox-row" style={{ margin: 0 }}>
+                  <input
+                    type="radio"
+                    name="travelType"
+                    checked={form.travelType === 'other'}
+                    onChange={() => setForm({ ...form, travelType: 'other' })}
+                  />
+                  Other amount (e.g. train ticket)
+                </label>
+              </div>
+            </div>
+          )}
+
+          {selectedAssignment && form.includeTravel && form.travelType === 'other' && (
+            <div className="field-row">
+              <div className="field">
+                <label>Description (shown on the invoice)</label>
+                <input
+                  required
+                  placeholder="e.g. Train ticket Gent - Aalst"
+                  value={form.travelNote}
+                  onChange={(e) => setForm({ ...form, travelNote: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label>Amount (€)</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  required
+                  value={form.travelAmount}
+                  onChange={(e) => setForm({ ...form, travelAmount: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
+          {selectedAssignment && form.includeTravel && form.travelType === 'km' && (
             <div className="field-row">
               <div className="field">
                 <label>Distance, round trip (km)</label>

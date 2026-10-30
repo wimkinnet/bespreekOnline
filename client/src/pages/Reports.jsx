@@ -40,6 +40,7 @@ export default function Reports() {
         `Total excl. VAT: ${formatEUR(totalExclVat)}\n` +
         `VAT ${Math.round(report.vatRate * 100)}%: ${formatEUR(vatAmount)}\n` +
         `Total incl. VAT: ${formatEUR(totalInclVat)}\n\n` +
+        (report.onfactEnabled ? 'One invoice per client will be created in OnFact, with its official number. ' : '') +
         'These logs will be marked as invoiced. Completed assignments with all logs invoiced become Invoiced, which is final.'
     );
     if (!ok) return;
@@ -47,8 +48,16 @@ export default function Reports() {
     try {
       const { data } = await api.post('/reports/invoice', loadedPeriod);
       const closed = data.assignmentsInvoiced;
+      const onfactInvoices = data.invoices || [];
+      const onfactErrors = data.errors || [];
       alert(
         `${data.entriesInvoiced} time log${data.entriesInvoiced === 1 ? '' : 's'} marked as invoiced.` +
+          (onfactInvoices.length
+            ? `\n\nCreated in OnFact:\n- ${onfactInvoices.map((i) => `${i.clientName} (#${i.id})`).join('\n- ')}`
+            : '') +
+          (onfactErrors.length
+            ? `\n\nNOT invoiced, these logs stay open:\n- ${onfactErrors.map((e) => `${e.clientName}: ${e.message}`).join('\n- ')}`
+            : '') +
           (closed.length ? `\n\nAssignments now invoiced:\n- ${closed.join('\n- ')}` : '')
       );
       await load();
@@ -170,8 +179,8 @@ export default function Reports() {
                   {report.byClient.map((c) => (
                     <tr key={c.clientName}>
                       <td>{c.clientName}</td>
-                      <td>{c.hours.toFixed(1)}</td>
-                      <td>{c.days.toFixed(1)}</td>
+                      <td>{c.hours.toFixed(2)}</td>
+                      <td>{c.days.toFixed(2)}</td>
                       <td>{c.entries}</td>
                       <td>{formatEUR(c.amount)}</td>
                       <td>{formatEUR(c.travelAmount)}</td>
@@ -206,8 +215,8 @@ export default function Reports() {
                   {report.byConsultant.map((c) => (
                     <tr key={c.consultantName}>
                       <td>{c.consultantName}</td>
-                      <td>{c.hours.toFixed(1)}</td>
-                      <td>{c.days.toFixed(1)}</td>
+                      <td>{c.hours.toFixed(2)}</td>
+                      <td>{c.days.toFixed(2)}</td>
                       <td>{c.entries}</td>
                       <td>{formatEUR(c.amount)}</td>
                       <td>{formatEUR(c.travelAmount)}</td>

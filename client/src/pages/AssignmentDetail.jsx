@@ -4,7 +4,7 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import TimeEntryForm, { entryLockReason } from '../components/TimeEntryForm';
 import TimeEntryEditModal from '../components/TimeEntryEditModal';
-import { formatEUR, formatDate, billingTypeLabel, statusLabel, rateUnitLabel } from '../utils/format';
+import { formatEUR, formatDate, billingTypeLabel, statusLabel, rateUnitLabel, travelLabel } from '../utils/format';
 
 export default function AssignmentDetail() {
   const { id } = useParams();
@@ -130,9 +130,9 @@ export default function AssignmentDetail() {
           <div className="label">Logged</div>
           <div className="value" style={{ fontSize: 18 }}>
             {['hourly', 'fixed'].includes(assignment.billingType)
-              ? `${totals.hours.toFixed(1)} h`
+              ? `${totals.hours.toFixed(2)} h`
               : ['daily', 'half_day'].includes(assignment.billingType)
-              ? `${totals.days.toFixed(1)} d`
+              ? `${totals.days.toFixed(2)} d`
               : `${timeEntries.length} entries`}
           </div>
         </div>
@@ -146,7 +146,7 @@ export default function AssignmentDetail() {
           )}
           {totals.travelAmount > 0 && (
             <div className="muted" style={{ fontSize: 12 }}>
-              + {formatEUR(totals.travelAmount)} travel ({totals.travelKm.toFixed(1)} km)
+              + {formatEUR(totals.travelAmount)} travel{totals.travelKm > 0 && ` (${totals.travelKm.toFixed(1)} km)`}
             </div>
           )}
         </div>
@@ -272,7 +272,7 @@ export default function AssignmentDetail() {
                   <td>{e.hours ? `${e.hours} h` : e.days ? `${e.days} d` : '—'}</td>
                   <td>{e.description || '—'}</td>
                   <td>{formatEUR(e.amount)}</td>
-                  <td>{e.travelIncluded ? `${e.travelKm} km × ${formatEUR(e.travelRate)} = ${formatEUR(e.travelAmount)}` : '—'}</td>
+                  <td>{travelLabel(e)}</td>
                   <td>{e.invoiced ? 'Yes' : 'No'}</td>
                   <td style={{ textAlign: 'right' }}>
                     {entryLockReason(e, assignment.status) ? (

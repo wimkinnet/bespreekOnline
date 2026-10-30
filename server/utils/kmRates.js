@@ -34,6 +34,7 @@ const LEGACY_ROUNDING = 5;
 
 // Round-trip km to claim for a time entry: the recorded km, or the estimate from the legacy amount
 function claimKm(entry) {
+  if (entry.travelType === 'other') return { km: 0, estimated: false }; // no km driven, e.g. a train ticket
   if (entry.travelKm > 0) return { km: entry.travelKm, estimated: false };
   if (entry.travelAmount > 0) {
     // amount = km × 0.45 rounded up to 5, so km × 0.45 > amount − 5: the smallest whole km above that

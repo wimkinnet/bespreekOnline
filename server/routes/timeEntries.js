@@ -13,9 +13,31 @@ router.use(protect);
 // Travel fields for a time entry. Uses the km the consultant confirmed (they may correct the
 // suggested distance), or looks up the round-trip distance from their home address to the client.
 // The rate per km is chosen per entry; without one, the default from TRAVEL_RATE_PER_KM applies.
-async function computeTravel({ includeTravel, travelKm, travelRate }, consultantId, clientId) {
+// Other costs, such as train tickets, are an entered amount with a description.
+async function computeTravel(
+  { includeTravel, travelType, travelKm, travelRate, travelAmount, travelNote },
+  consultantId,
+  clientId
+) {
+  const noKm = { travelKm: undefined, travelRate: undefined };
   if (!includeTravel) {
-    return { travelIncluded: false, travelKm: undefined, travelRate: undefined, travelAmount: 0 };
+    return { travelIncluded: false, travelType: 'km', travelNote: undefined, travelAmount: 0, ...noKm };
+  }
+  if (travelType === 'other') {
+    const amount = Number(travelAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new DistanceError('Enter the amount of the travel costs.');
+    }
+    if (!travelNote || !String(travelNote).trim()) {
+      throw new DistanceError('Describe the travel costs, for example "Train ticket Gent - Aalst".');
+    }
+    return {
+      travelIncluded: true,
+      travelType: 'other',
+      travelNote,
+      travelAmount: Math.round(amount * 100) / 100,
+      ...noKm,
+    };
   }
   let km = travelKm !== undefined && travelKm !== '' && travelKm !== null ? Number(travelKm) : null;
   if (km !== null && (!Number.isFinite(km) || km < 0)) {
@@ -34,7 +56,14 @@ async function computeTravel({ includeTravel, travelKm, travelRate }, consultant
     throw new DistanceError('Travel rate must be a positive amount per km.');
   }
   // Travel costs are rounded to the nearest whole euro
-  return { travelIncluded: true, travelKm: km, travelRate: rate, travelAmount: Math.round(km * rate) };
+  return {
+    travelIncluded: true,
+    travelType: 'km',
+    travelNote: undefined,
+    travelKm: km,
+    travelRate: rate,
+    travelAmount: Math.round(km * rate),
+  };
 }
 
 // A fixed fee is billed by registering (parts of) it; the registered total may not exceed the fee.
@@ -60,6 +89,9 @@ function validateLogged(billingType, { hours, days }) {
   if (billingType === 'hourly' && !Number(hours)) return 'This assignment is billed hourly - enter hours.';
   if (['daily', 'half_day'].includes(billingType) && !Number(days)) {
     return 'This assignment is billed per (half) day - enter days.';
+  }
+  if (billingType === 'daily' && (days * 4) % 1 !== 0) {
+    return 'This assignment is billed per day - enter days in steps of 0.25.';
   }
   if (billingType === 'half_day' && (days * 2) % 1 !== 0) {
     return 'This assignment is billed per half day - enter days in steps of 0.5.';
@@ -121,8 +153,11 @@ router.post('/', async (req, res) => {
       description,
       billable,
       includeTravel,
+      travelType,
       travelKm,
       travelRate,
+      travelAmount,
+      travelNote,
     } = req.body;
 
     if (!assignmentId || !date) {
@@ -151,7 +186,11 @@ router.post('/', async (req, res) => {
 
     const { amount, rateApplied, billingType } = computeAmount(assignment, { hours, days, feeAmount });
     const consultantId = req.user.role === 'admin' && req.body.consultant ? req.body.consultant : req.user._id;
-    const travel = await computeTravel({ includeTravel, travelKm, travelRate }, consultantId, assignment.client);
+    const travel = await computeTravel(
+      { includeTravel, travelType, travelKm, travelRate, travelAmount, travelNote },
+      consultantId,
+      assignment.client
+    );
 
     const entry = await TimeEntry.create({
       consultant: consultantId,
@@ -198,7 +237,8 @@ router.put('/:id', async (req, res) => {
     if (entry.invoiced) return res.status(400).json({ message: INVOICED_ENTRY_LOCKED });
     if (entry.travelClaim) return res.status(400).json({ message: TRAVEL_CLAIMED_LOCKED });
 
-    const { date, hours, days, feeAmount, description, billable, includeTravel, travelKm, travelRate } = req.body;
+    const { date, hours, days, feeAmount, description, billable } = req.body;
+    const { includeTravel, travelType, travelKm, travelRate, travelAmount, travelNote } = req.body;
     if (date !== undefined) entry.date = date;
     if (description !== undefined) entry.description = description;
     if (billable !== undefined) entry.billable = billable;
@@ -223,12 +263,16 @@ router.put('/:id', async (req, res) => {
       entry.amount = amount;
     }
 
-    if (includeTravel !== undefined || travelKm !== undefined || travelRate !== undefined) {
+    const travelSent = [includeTravel, travelType, travelKm, travelRate, travelAmount, travelNote];
+    if (travelSent.some((v) => v !== undefined)) {
       const travel = await computeTravel(
         {
           includeTravel: includeTravel !== undefined ? includeTravel : entry.travelIncluded,
+          travelType: travelType !== undefined ? travelType : entry.travelType,
           travelKm: travelKm !== undefined ? travelKm : entry.travelKm,
           travelRate: travelRate !== undefined ? travelRate : entry.travelRate,
+          travelAmount: travelAmount !== undefined ? travelAmount : entry.travelAmount,
+          travelNote: travelNote !== undefined ? travelNote : entry.travelNote,
         },
         entry.consultant,
         entry.client

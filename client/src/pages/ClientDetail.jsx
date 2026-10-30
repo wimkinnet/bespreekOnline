@@ -241,6 +241,7 @@ export default function ClientDetail() {
             <p style={{ marginBottom: 2 }}>{client.address?.street || '—'}</p>
             <p style={{ marginBottom: 2 }}>
               {client.address?.postalCode} {client.address?.city}
+              {client.address?.country && client.address.country !== 'Belgium' && `, ${client.address.country}`}
             </p>
             <p className="muted" style={{ marginBottom: 0 }}>
               VAT: {client.vatNumber || '—'}

@@ -42,6 +42,21 @@ bespreekOnline/
   stored on disk under `UPLOAD_DIR/<clientId>/...` — see the storage note
   below before deploying.
 
+## Test environment
+
+Runs this app on your own machine with dummy data, in its own database that is
+separate from the one in `.env`, and with a simulated OnFact.
+
+```bash
+cd server && npm run test-env        # add :reset to start over with fresh dummy data
+cd client && npm run dev:test        # open http://localhost:5174
+```
+
+Log in with `test.admin@example.com` or `test.consultant@example.com`, password
+`test1234`. Invoices sent to the simulated OnFact can be read at
+http://localhost:5003/v1/invoices.json. A client with "FAIL" in its name gets a
+simulated OnFact error.
+
 ## Local setup
 
 You'll need Node 18+ and a MongoDB connection string. The free tier of

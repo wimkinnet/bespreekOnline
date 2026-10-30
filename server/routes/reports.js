@@ -4,6 +4,7 @@ const ExcelJS = require('exceljs');
 const TimeEntry = require('../models/TimeEntry');
 const Assignment = require('../models/Assignment');
 const { protect, requireRole } = require('../middleware/auth');
+const onfact = require('../utils/onfact');
 
 router.use(protect, requireRole('admin'));
 
@@ -118,11 +119,12 @@ router.get('/summary', async (req, res) => {
     const grandTotal = byClient.reduce((sum, c) => sum + c.amount, 0);
     const travelTotal = byClient.reduce((sum, c) => sum + c.travelAmount, 0);
 
-    // What "Invoice period" would still mark as invoiced
-    const toInvoiceByClient = await totalsByClient({ ...match, invoiced: { $ne: true } });
+    // What "Invoice period" would still mark as invoiced; non-billable logs are marked too but not charged
+    const uninvoiced = { ...match, invoiced: { $ne: true } };
+    const toInvoiceByClient = await totalsByClient({ ...uninvoiced, billable: { $ne: false } });
     const sumOf = (rows, key) => roundCents(rows.reduce((sum, c) => sum + c[key], 0));
     const toInvoice = {
-      entries: sumOf(toInvoiceByClient, 'entries'),
+      entries: await TimeEntry.countDocuments(uninvoiced),
       amount: sumOf(toInvoiceByClient, 'amount'),
       travelAmount: sumOf(toInvoiceByClient, 'travelAmount'),
       totalExclVat: sumOf(toInvoiceByClient, 'totalExclVat'),
@@ -139,20 +141,63 @@ router.get('/summary', async (req, res) => {
       vatTotal,
       totalInclVat,
       toInvoice,
+      onfactEnabled: onfact.isEnabled(),
     });
   } catch (err) {
     res.status(500).json({ message: 'Could not build report.', error: err.message });
   }
 });
 
+// Creates one OnFact invoice per client for the billable entries, and marks a client's entries as invoiced
+// only once its invoice exists. A client whose invoice fails keeps its entries open, so it can be retried.
+async function invoiceThroughOnFact(match) {
+  const entries = await TimeEntry.find(match).sort({ date: 1 }).populate('client').populate('assignment', 'title');
+  const byClient = new Map();
+  for (const entry of entries) {
+    const key = String(entry.client?._id);
+    if (!byClient.has(key)) byClient.set(key, []);
+    byClient.get(key).push(entry);
+  }
+
+  let entriesInvoiced = 0;
+  const invoices = [];
+  const errors = [];
+  for (const group of byClient.values()) {
+    const { client } = group[0];
+    const billable = group.filter((e) => e.billable !== false);
+    try {
+      if (billable.length > 0) {
+        const id = await onfact.createInvoice(client, billable, VAT_RATE);
+        invoices.push({ clientName: client.name, id });
+        await TimeEntry.updateMany({ _id: { $in: billable.map((e) => e._id) } }, { $set: { onfactInvoiceId: id } });
+      }
+    } catch (err) {
+      errors.push({ clientName: client?.name || 'Unknown client', message: err.message });
+      continue;
+    }
+    const { modifiedCount } = await TimeEntry.updateMany(
+      { _id: { $in: group.map((e) => e._id) } },
+      { $set: { invoiced: true } }
+    );
+    entriesInvoiced += modifiedCount;
+  }
+  return { entriesInvoiced, invoices, errors };
+}
+
 // POST /api/reports/invoice { from, to }
-// Marks every time entry in the period as invoiced. Completed assignments that then have all
-// their entries invoiced move to the final status 'invoiced'.
+// Marks every time entry in the period as invoiced, through OnFact when that is configured. Completed
+// assignments that then have all their entries invoiced move to the final status 'invoiced'.
 router.post('/invoice', async (req, res) => {
   try {
     const match = { ...dateMatch(req.body), invoiced: { $ne: true } };
     const assignmentIds = await TimeEntry.distinct('assignment', match);
-    const { modifiedCount } = await TimeEntry.updateMany(match, { $set: { invoiced: true } });
+    let result;
+    if (onfact.isEnabled()) {
+      result = await invoiceThroughOnFact(match);
+    } else {
+      const { modifiedCount } = await TimeEntry.updateMany(match, { $set: { invoiced: true } });
+      result = { entriesInvoiced: modifiedCount };
+    }
 
     const completed = await Assignment.find({ _id: { $in: assignmentIds }, status: 'completed' }).select('_id title');
     const closed = [];
@@ -162,7 +207,7 @@ router.post('/invoice', async (req, res) => {
     }
     await Assignment.updateMany({ _id: { $in: closed.map((a) => a._id) } }, { $set: { status: 'invoiced' } });
 
-    res.json({ entriesInvoiced: modifiedCount, assignmentsInvoiced: closed.map((a) => a.title) });
+    res.json({ ...result, assignmentsInvoiced: closed.map((a) => a.title) });
   } catch (err) {
     res.status(500).json({ message: 'Could not invoice this period.', error: err.message });
   }
@@ -208,7 +253,7 @@ router.get('/by-client.xlsx', async (req, res) => {
 
     sheet.columns.forEach((col, i) => {
       col.width = i === 0 ? 36 : 16;
-      if (i === 1 || i === 2) col.numFmt = '0.0';
+      if (i === 1 || i === 2) col.numFmt = '0.00';
       if (i >= 4) col.numFmt = '€ #,##0.00';
     });
 

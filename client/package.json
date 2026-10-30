@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:test": "VITE_TEST_ENV=1 API_PROXY_TARGET=http://localhost:5002 vite --port 5174",
     "build": "vite build",
     "preview": "vite preview"
   },

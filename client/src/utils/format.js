@@ -28,3 +28,11 @@ export function statusLabel(status) {
 export function clientTypeLabel(type) {
   return { school: 'School', school_pool: 'School group', other: 'Other' }[type] || type;
 }
+
+// Travel costs of a time entry: km x rate, or a described amount such as a train ticket
+export function travelLabel(entry) {
+  if (!entry.travelIncluded) return '—';
+  if (entry.travelType === 'other') return `${entry.travelNote}: ${formatEUR(entry.travelAmount)}`;
+  if (!entry.travelKm) return formatEUR(entry.travelAmount);
+  return `${entry.travelKm} km × ${formatEUR(entry.travelRate)} = ${formatEUR(entry.travelAmount)}`;
+}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import { formatEUR, formatDate, statusLabel } from '../utils/format';
+import { formatEUR, formatDate, statusLabel, travelLabel } from '../utils/format';
 
 // One colour per assignment; logs take the colour of their assignment
 const PALETTE = [
@@ -250,7 +250,7 @@ export default function Calendar() {
                     </div>
                     <div>
                       {[describeTime(e), formatEUR(e.amount)].filter(Boolean).join(' · ')}
-                      {e.travelIncluded && ` · travel ${formatEUR(e.travelAmount)} (${e.travelKm} km)`}
+                      {e.travelIncluded && ` · travel ${travelLabel(e)}`}
                       {e.invoiced && <span className="badge status-invoiced" style={{ marginLeft: 6 }}>Invoiced</span>}
                     </div>
                     {e.description && <div className="muted">{e.description}</div>}

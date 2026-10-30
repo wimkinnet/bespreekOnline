@@ -9,7 +9,7 @@ async function run() {
   const dryRun = process.argv.includes('--dry-run');
   await connectDB();
 
-  const entries = await TimeEntry.find({ travelIncluded: true });
+  const entries = await TimeEntry.find({ travelIncluded: true, travelType: { $ne: 'other' } });
   let changed = 0;
   for (const entry of entries) {
     const rounded = Math.round((entry.travelKm || 0) * (entry.travelRate || 0));

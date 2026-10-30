@@ -237,6 +237,19 @@ textarea {
   font-size: 12.5px;
 }
 
+.test-env-banner {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 100;
+  padding: 3px 10px;
+  border-bottom-left-radius: var(--radius);
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 /* Buttons at the end of a table row: side by side and matching */
 .row-actions {
   display: inline-flex;

@@ -17,10 +17,14 @@ const timeEntrySchema = new mongoose.Schema(
     amount: { type: Number, required: true }, // computed: hours*rate, days*rate, or the registered part of a fixed fee
     // Travel costs, billed on top of the work amount (also for fixed-fee assignments)
     travelIncluded: { type: Boolean, default: false },
+    // 'km' is calculated from km x rate; 'other' is an entered amount, e.g. a train ticket
+    travelType: { type: String, enum: ['km', 'other'], default: 'km' },
+    travelNote: { type: String, trim: true }, // what an 'other' cost is; shown on the invoice
     travelKm: { type: Number, min: 0 }, // round trip, consultant's home -> client -> home
     travelRate: { type: Number, min: 0 }, // EUR per km at the time of entry
     travelAmount: { type: Number, default: 0 },
     invoiced: { type: Boolean, default: false },
+    onfactInvoiceId: { type: String }, // the OnFact invoice this entry is on, when invoiced through OnFact
     // Set once the travel of this entry is on a consultant's expense claim; the entry is then locked
     travelClaim: { type: mongoose.Schema.Types.ObjectId, ref: 'TravelClaim', default: null },
   },
