@@ -2,7 +2,8 @@
 // ONFACT_COMPANY_UUID are all set; there is deliberately no default URL, so nothing reaches OnFact by accident.
 //
 // Fields follow the "Create Invoice" reference, but this has not been tried against the real API yet.
-// The API has no draft status: a created invoice gets the next number of its journal.
+// The API has no draft status: a created invoice gets the next number of its journal. It is not sent to the
+// client, that stays a separate step in OnFact (PEPPOL or email).
 
 class OnFactError extends Error {}
 
@@ -72,6 +73,7 @@ function buildInvoice(client, entries, vatRate) {
   const { street, number } = splitStreet(client.address?.street);
   const invoice = {
     vattype: 'excl',
+    automatic_reminders: false, // an invoice waiting to be sent must not trigger a payment reminder
     vat_exception: '03', // standard Belgian VAT
     customer_name: client.name,
     customer_street: street || undefined,

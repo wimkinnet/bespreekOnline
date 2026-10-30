@@ -25,6 +25,7 @@ export default function AssignmentDetail() {
     const { data: res } = await api.get(`/assignments/${id}`);
     setData(res);
     setForm({
+      title: res.assignment.title,
       status: res.assignment.status,
       billingType: res.assignment.billingType,
       rate: res.assignment.rate,
@@ -50,6 +51,7 @@ export default function AssignmentDetail() {
     setError('');
     try {
       await api.put(`/assignments/${id}`, {
+        title: form.title,
         status: form.status,
         billingType: form.billingType,
         rate: Number(form.rate),
@@ -157,6 +159,10 @@ export default function AssignmentDetail() {
           <h3>Edit assignment</h3>
           {error && <div className="error-banner">{error}</div>}
           <form onSubmit={handleSave}>
+            <div className="field">
+              <label>Name</label>
+              <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            </div>
             <div className="field-row">
               <div className="field">
                 <label>Billing type</label>

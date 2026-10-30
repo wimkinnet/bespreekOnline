@@ -40,7 +40,7 @@ export default function Reports() {
         `Total excl. VAT: ${formatEUR(totalExclVat)}\n` +
         `VAT ${Math.round(report.vatRate * 100)}%: ${formatEUR(vatAmount)}\n` +
         `Total incl. VAT: ${formatEUR(totalInclVat)}\n\n` +
-        (report.onfactEnabled ? 'One invoice per client will be created in OnFact, with its official number. ' : '') +
+        (report.onfactEnabled ? 'One invoice per client will be created in OnFact, with its official number. They are not sent to clients yet: review and send them from OnFact. ' : '') +
         'These logs will be marked as invoiced. Completed assignments with all logs invoiced become Invoiced, which is final.'
     );
     if (!ok) return;
