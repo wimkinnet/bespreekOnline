@@ -110,7 +110,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/travel-claims { consultant, from, to }
-// Issues a numbered expense claim and locks the travel of its time entries.
+// Issues a numbered expense claim and locks its time entries.
 router.post('/', async (req, res) => {
   try {
     const { consultant: consultantId, from, to } = req.body;

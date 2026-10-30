@@ -21,7 +21,7 @@ const timeEntrySchema = new mongoose.Schema(
     travelRate: { type: Number, min: 0 }, // EUR per km at the time of entry
     travelAmount: { type: Number, default: 0 },
     invoiced: { type: Boolean, default: false },
-    // Set once the travel of this entry is on a consultant's expense claim; the travel is then locked
+    // Set once the travel of this entry is on a consultant's expense claim; the entry is then locked
     travelClaim: { type: mongoose.Schema.Types.ObjectId, ref: 'TravelClaim', default: null },
   },
   { timestamps: true }

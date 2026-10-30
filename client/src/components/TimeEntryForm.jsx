@@ -32,13 +32,45 @@ const emptyEntry = (assignment = '') => ({
   travelRate: DEFAULT_TRAVEL_RATE,
 });
 
-// "New entry" form, used on the Time registration page (pick any assignment) and on an
-// assignment's detail page (`assignment` given: the form is locked to that assignment).
-export default function TimeEntryForm({ assignments = [], assignment: lockedAssignment, onSaved }) {
+// Flatten a time entry from the API into form values
+function entryToForm(entry) {
+  const usesHours = ['hourly', 'fixed'].includes(entry.billingType);
+  const logged = usesHours ? entry.hours : entry.days;
+  return {
+    assignment: entry.assignment._id,
+    date: entry.date.slice(0, 10),
+    amountValue: logged ? String(logged) : '',
+    feeAmount: entry.billingType === 'fixed' ? String(entry.amount) : '',
+    description: entry.description || '',
+    billable: entry.billable,
+    includeTravel: entry.travelIncluded || entry.travelAmount > 0,
+    travelKm: entry.travelKm ? String(entry.travelKm) : '',
+    travelRate: entry.travelRate !== undefined ? String(entry.travelRate) : DEFAULT_TRAVEL_RATE,
+  };
+}
+
+// Why a time entry can no longer be edited or deleted, or null when it still can be.
+// `assignmentStatus` defaults to the status on a populated assignment.
+export function entryLockReason(entry, assignmentStatus = entry.assignment?.status) {
+  if (entry.invoiced || assignmentStatus === 'invoiced') return 'Invoiced';
+  if (entry.travelClaim) return 'On expense claim';
+  return null;
+}
+
+// Entry form, used on the Time registration page (pick any assignment), on an assignment's
+// detail page (`assignment` given: the form is locked to that assignment) and to edit an
+// existing entry (`entry` given: the form is locked to its assignment, billing type and rate).
+export default function TimeEntryForm({ assignments = [], assignment, entry, onSaved, onCancel }) {
+  // The entry's own billing type and rate apply, even if the assignment's have changed since
+  const lockedAssignment = entry
+    ? { ...entry.assignment, client: entry.client, billingType: entry.billingType, rate: entry.rateApplied }
+    : assignment;
+  // Old entries can have a travel amount without km; it stays as it is unless km are entered
+  const legacyTravel = entry?.travelAmount > 0 && !entry.travelKm;
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedCount, setSavedCount] = useState(0); // refreshes the remaining fixed fee after each save
-  const [form, setForm] = useState(emptyEntry(lockedAssignment?._id));
+  const [form, setForm] = useState(entry ? entryToForm(entry) : emptyEntry(lockedAssignment?._id));
   const [travel, setTravel] = useState(null); // distance lookup result for the selected assignment
   const [travelError, setTravelError] = useState('');
   const [travelLoading, setTravelLoading] = useState(false);
@@ -56,25 +88,29 @@ export default function TimeEntryForm({ assignments = [], assignment: lockedAssi
     let cancelled = false;
     api.get(`/assignments/${fixedAssignmentId}`).then(({ data }) => {
       if (cancelled) return;
-      const remaining = Math.max(0, Math.round((data.assignment.rate - data.totals.amount) * 100) / 100);
+      // When editing, this entry's own amount is available again
+      const registered = data.totals.amount - (entry?.amount || 0);
+      const remaining = Math.max(0, Math.round((data.assignment.rate - registered) * 100) / 100);
       setFeeRemaining(remaining);
       setForm((f) => (f.feeAmount === '' ? { ...f, feeAmount: String(remaining) } : f));
     });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixedAssignmentId, savedCount]);
 
   // Look up the distance from the consultant's home to the client once travel costs are requested
+  // (when editing, from the entry's consultant, and never over the km already saved on the entry)
   const clientId = selectedAssignment?.client?._id;
   useEffect(() => {
-    if (!form.includeTravel || !clientId) return;
+    if (!form.includeTravel || !clientId || legacyTravel || (entry && form.travelKm !== '')) return;
     let cancelled = false;
     setTravel(null);
     setTravelError('');
     setTravelLoading(true);
     api
-      .get('/distance', { params: { client: clientId } })
+      .get('/distance', { params: { client: clientId, consultant: entry?.consultant?._id } })
       .then(({ data }) => {
         if (cancelled) return;
         setTravel(data);
@@ -89,6 +125,7 @@ export default function TimeEntryForm({ assignments = [], assignment: lockedAssi
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.includeTravel, clientId]);
 
   async function handleSubmit(e) {
@@ -102,27 +139,40 @@ export default function TimeEntryForm({ assignments = [], assignment: lockedAssi
         date: form.date,
         description: form.description,
         billable: form.billable,
-        includeTravel: form.includeTravel,
       };
-      if (form.includeTravel) {
-        if (form.travelKm !== '') payload.travelKm = Number(form.travelKm);
-        payload.travelRate = Number(form.travelRate);
+      // When editing, unchanged travel is left alone so its amount is not recalculated
+      const saved = entry && entryToForm(entry);
+      const travelChanged =
+        !saved ||
+        form.includeTravel !== saved.includeTravel ||
+        form.travelKm !== saved.travelKm ||
+        form.travelRate !== saved.travelRate;
+      if (travelChanged) {
+        payload.includeTravel = form.includeTravel;
+        if (form.includeTravel) {
+          if (form.travelKm !== '') payload.travelKm = Number(form.travelKm);
+          payload.travelRate = Number(form.travelRate);
+        }
       }
       if (selectedAssignment.billingType === 'hourly') payload.hours = Number(form.amountValue);
       if (['daily', 'half_day'].includes(selectedAssignment.billingType)) payload.days = Number(form.amountValue);
       // Fixed fees are billed by registering an amount; hours worked are tracked for visibility only
       if (selectedAssignment.billingType === 'fixed') {
         payload.feeAmount = Number(form.feeAmount);
-        payload.hours = Number(form.amountValue) || undefined;
+        payload.hours = Number(form.amountValue) || null;
       }
 
-      const { data: entry } = await api.post('/time-entries', payload);
-      setForm(emptyEntry(selectedAssignment._id));
-      setSavedCount((n) => n + 1);
+      const { data: savedEntry } = entry
+        ? await api.put(`/time-entries/${entry._id}`, payload)
+        : await api.post('/time-entries', payload);
+      if (!entry) {
+        setForm(emptyEntry(selectedAssignment._id));
+        setSavedCount((n) => n + 1);
+      }
 
       // The whole fixed fee is now registered: offer to close the assignment
       if (
-        entry.assignmentFullyBilled &&
+        savedEntry.assignmentFullyBilled &&
         window.confirm(
           `The full fixed fee of ${formatEUR(selectedAssignment.rate)} for "${selectedAssignment.title}" is now billed.\n\nMark this assignment as completed?`,
         )
@@ -290,7 +340,7 @@ export default function TimeEntryForm({ assignments = [], assignment: lockedAssi
                   type="number"
                   min="0"
                   step="0.1"
-                  required
+                  required={!legacyTravel}
                   placeholder={travelLoading ? 'Calculating…' : ''}
                   value={form.travelKm}
                   onChange={(e) => setForm({ ...form, travelKm: e.target.value })}
@@ -330,7 +380,9 @@ export default function TimeEntryForm({ assignments = [], assignment: lockedAssi
                   value={
                     form.travelKm !== '' && form.travelRate !== ''
                       ? formatEUR(Math.round(Number(form.travelKm) * Number(form.travelRate)))
-                      : '—'
+                      : legacyTravel
+                        ? formatEUR(entry.travelAmount)
+                        : '—'
                   }
                 />
               </div>
@@ -356,8 +408,13 @@ export default function TimeEntryForm({ assignments = [], assignment: lockedAssi
           </div>
 
           <button className="btn btn-primary" type="submit" disabled={saving || !selectedAssignment}>
-            {saving ? 'Saving…' : 'Log time'}
+            {saving ? 'Saving…' : entry ? 'Save changes' : 'Log time'}
           </button>
+          {onCancel && (
+            <button className="btn" type="button" style={{ marginLeft: 8 }} onClick={onCancel}>
+              Cancel
+            </button>
+          )}
         </form>
       )}
     </>

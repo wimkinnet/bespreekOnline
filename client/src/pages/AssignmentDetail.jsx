@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import TimeEntryForm from '../components/TimeEntryForm';
+import TimeEntryForm, { entryLockReason } from '../components/TimeEntryForm';
+import TimeEntryEditModal from '../components/TimeEntryEditModal';
 import { formatEUR, formatDate, billingTypeLabel, statusLabel, rateUnitLabel } from '../utils/format';
 
 export default function AssignmentDetail() {
@@ -17,6 +18,7 @@ export default function AssignmentDetail() {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [editingEntry, setEditingEntry] = useState(null);
 
   // Refreshes in place after the first load, so logging time doesn't flash the whole page
   async function load() {
@@ -259,6 +261,7 @@ export default function AssignmentDetail() {
                 <th>Amount</th>
                 <th>Travel</th>
                 <th>Invoiced</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -271,6 +274,20 @@ export default function AssignmentDetail() {
                   <td>{formatEUR(e.amount)}</td>
                   <td>{e.travelIncluded ? `${e.travelKm} km × ${formatEUR(e.travelRate)} = ${formatEUR(e.travelAmount)}` : '—'}</td>
                   <td>{e.invoiced ? 'Yes' : 'No'}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {entryLockReason(e, assignment.status) ? (
+                      <span className="muted">{entryLockReason(e, assignment.status)}</span>
+                    ) : (
+                      (user.role === 'admin' || e.consultant?._id === user.id) && (
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => setEditingEntry({ ...e, assignment, client: assignment.client })}
+                        >
+                          Edit
+                        </button>
+                      )
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -306,6 +323,17 @@ export default function AssignmentDetail() {
           </table>
         )}
       </div>
+
+      {editingEntry && (
+        <TimeEntryEditModal
+          entry={editingEntry}
+          onClose={() => setEditingEntry(null)}
+          onSaved={() => {
+            setEditingEntry(null);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }

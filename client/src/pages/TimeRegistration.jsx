@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { formatEUR, formatDate } from '../utils/format';
-import TimeEntryForm from '../components/TimeEntryForm';
+import TimeEntryForm, { entryLockReason } from '../components/TimeEntryForm';
+import TimeEntryEditModal from '../components/TimeEntryEditModal';
 
 export default function TimeRegistration() {
   const { user } = useAuth();
   const [assignments, setAssignments] = useState([]);
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editingEntry, setEditingEntry] = useState(null);
 
   // Refreshes in place (no loading screen) so the entry form keeps its selected assignment
   async function load() {
@@ -82,10 +84,17 @@ export default function TimeRegistration() {
                   <td>{e.billable ? 'Yes' : 'No'}</td>
                   <td>{e.invoiced ? 'Yes' : 'No'}</td>
                   <td style={{ textAlign: 'right' }}>
-                    {!e.invoiced && (
-                      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(e._id)}>
-                        Delete
-                      </button>
+                    {entryLockReason(e) ? (
+                      <span className="muted">{entryLockReason(e)}</span>
+                    ) : (
+                      <>
+                        <button className="btn btn-sm" style={{ marginRight: 6 }} onClick={() => setEditingEntry(e)}>
+                          Edit
+                        </button>
+                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(e._id)}>
+                          Delete
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -94,6 +103,17 @@ export default function TimeRegistration() {
           </table>
         )}
       </div>
+
+      {editingEntry && (
+        <TimeEntryEditModal
+          entry={editingEntry}
+          onClose={() => setEditingEntry(null)}
+          onSaved={() => {
+            setEditingEntry(null);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }

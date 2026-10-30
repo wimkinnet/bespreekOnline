@@ -52,8 +52,20 @@ async function validateFeeAmount(assignment, feeAmount, excludeEntryId) {
 }
 
 const INVOICED_ASSIGNMENT_LOCKED = 'This assignment is invoiced; its time entries can no longer be changed.';
-const TRAVEL_CLAIMED_LOCKED =
-  'The travel of this entry is on an expense claim; its date and travel can no longer be changed and it cannot be deleted.';
+const INVOICED_ENTRY_LOCKED = 'This entry has already been invoiced and can no longer be changed.';
+const TRAVEL_CLAIMED_LOCKED = 'The travel of this entry is on an expense claim; it can no longer be changed or deleted.';
+
+// The hours or days an entry needs for its billing type. Returns an error message, or null when valid.
+function validateLogged(billingType, { hours, days }) {
+  if (billingType === 'hourly' && !Number(hours)) return 'This assignment is billed hourly - enter hours.';
+  if (['daily', 'half_day'].includes(billingType) && !Number(days)) {
+    return 'This assignment is billed per (half) day - enter days.';
+  }
+  if (billingType === 'half_day' && (days * 2) % 1 !== 0) {
+    return 'This assignment is billed per half day - enter days in steps of 0.5.';
+  }
+  return null;
+}
 
 // True when a fixed-fee assignment has its whole fee registered but is not marked completed yet,
 // so the client can offer to close it.
@@ -87,7 +99,7 @@ router.get('/', async (req, res) => {
 
     const entries = await TimeEntry.find(filter)
       .populate('consultant', 'name')
-      .populate('assignment', 'title billingType rate')
+      .populate('assignment', 'title billingType rate status')
       .populate('client', 'name')
       .sort({ date: -1 });
 
@@ -129,15 +141,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'This assignment is invoiced; no more time can be logged on it.' });
     }
 
-    if (assignment.billingType === 'hourly' && !hours) {
-      return res.status(400).json({ message: 'This assignment is billed hourly - enter hours.' });
-    }
-    if (['daily', 'half_day'].includes(assignment.billingType) && !days) {
-      return res.status(400).json({ message: 'This assignment is billed per (half) day - enter days.' });
-    }
-    if (assignment.billingType === 'half_day' && (days * 2) % 1 !== 0) {
-      return res.status(400).json({ message: 'This assignment is billed per half day - enter days in steps of 0.5.' });
-    }
+    const loggedError = validateLogged(assignment.billingType, { hours, days });
+    if (loggedError) return res.status(400).json({ message: loggedError });
 
     if (assignment.billingType === 'fixed') {
       const feeError = await validateFeeAmount(assignment, feeAmount);
@@ -177,7 +182,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/time-entries/:id - owner or admin only, and only while not yet invoiced
+// PUT /api/time-entries/:id - owner or admin only, and only while not invoiced and not on an expense claim
 router.put('/:id', async (req, res) => {
   try {
     const entry = await TimeEntry.findById(req.params.id).populate('assignment');
@@ -187,40 +192,35 @@ router.put('/:id', async (req, res) => {
     if (req.user.role !== 'admin' && !isOwner) {
       return res.status(403).json({ message: 'You can only edit your own time entries.' });
     }
-    if (entry.invoiced && req.user.role !== 'admin') {
-      return res.status(400).json({ message: 'This entry has already been invoiced and can only be changed by an admin.' });
-    }
     if (entry.assignment.status === 'invoiced') {
       return res.status(400).json({ message: INVOICED_ASSIGNMENT_LOCKED });
     }
+    if (entry.invoiced) return res.status(400).json({ message: INVOICED_ENTRY_LOCKED });
+    if (entry.travelClaim) return res.status(400).json({ message: TRAVEL_CLAIMED_LOCKED });
 
     const { date, hours, days, feeAmount, description, billable, includeTravel, travelKm, travelRate } = req.body;
-    const travelChanged = [date, includeTravel, travelKm, travelRate].some((v) => v !== undefined);
-    if (entry.travelClaim && travelChanged) {
-      return res.status(400).json({ message: TRAVEL_CLAIMED_LOCKED });
-    }
     if (date !== undefined) entry.date = date;
     if (description !== undefined) entry.description = description;
     if (billable !== undefined) entry.billable = billable;
 
     if (hours !== undefined || days !== undefined || feeAmount !== undefined) {
-      const isFixed = entry.assignment.billingType === 'fixed';
+      const newHours = hours !== undefined ? hours : entry.hours;
+      const newDays = days !== undefined ? days : entry.days;
       const fee = feeAmount !== undefined ? feeAmount : entry.amount;
-      if (isFixed) {
+      const loggedError = validateLogged(entry.billingType, { hours: newHours, days: newDays });
+      if (loggedError) return res.status(400).json({ message: loggedError });
+      if (entry.billingType === 'fixed' && entry.assignment.billingType === 'fixed') {
         const feeError = await validateFeeAmount(entry.assignment, fee, entry._id);
         if (feeError) return res.status(400).json({ message: feeError });
       }
-      const { amount, rateApplied, billingType } = computeAmount(entry.assignment, {
-        hours: hours !== undefined ? hours : entry.hours,
-        days: days !== undefined ? days : entry.days,
-        feeAmount: fee,
-      });
-      entry.hours = ['hourly', 'fixed'].includes(billingType)
-        ? (hours !== undefined ? hours : entry.hours) || undefined
-        : undefined;
-      entry.days = ['daily', 'half_day'].includes(billingType) ? (days !== undefined ? days : entry.days) : undefined;
+      // An edit keeps the entry's own billing type and rate, even if the assignment's have changed since
+      const { amount, billingType } = computeAmount(
+        { billingType: entry.billingType, rate: entry.rateApplied },
+        { hours: newHours, days: newDays, feeAmount: fee }
+      );
+      entry.hours = ['hourly', 'fixed'].includes(billingType) ? newHours || undefined : undefined;
+      entry.days = ['daily', 'half_day'].includes(billingType) ? newDays : undefined;
       entry.amount = amount;
-      entry.rateApplied = rateApplied;
     }
 
     if (includeTravel !== undefined || travelKm !== undefined || travelRate !== undefined) {
