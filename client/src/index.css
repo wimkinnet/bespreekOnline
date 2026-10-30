@@ -237,6 +237,21 @@ textarea {
   font-size: 12.5px;
 }
 
+/* Buttons at the end of a table row: side by side and matching */
+.row-actions {
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.row-actions .btn-danger {
+  border-color: var(--border);
+}
+
+.row-actions .btn-danger:hover {
+  border-color: var(--danger);
+}
+
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;

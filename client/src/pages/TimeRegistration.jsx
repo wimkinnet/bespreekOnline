@@ -87,14 +87,14 @@ export default function TimeRegistration() {
                     {entryLockReason(e) ? (
                       <span className="muted">{entryLockReason(e)}</span>
                     ) : (
-                      <>
-                        <button className="btn btn-sm" style={{ marginRight: 6 }} onClick={() => setEditingEntry(e)}>
+                      <div className="row-actions">
+                        <button className="btn btn-sm" onClick={() => setEditingEntry(e)}>
                           Edit
                         </button>
                         <button className="btn btn-sm btn-danger" onClick={() => handleDelete(e._id)}>
                           Delete
                         </button>
-                      </>
+                      </div>
                     )}
                   </td>
                 </tr>
