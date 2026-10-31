@@ -488,6 +488,13 @@ input[type='date']::-webkit-date-and-time-value {
 }
 
 /* ---------- Calendar ---------- */
+.calendar-consultants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
 .calendar-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;

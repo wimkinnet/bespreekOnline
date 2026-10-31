@@ -73,6 +73,7 @@ export default function Calendar() {
   const [assignments, setAssignments] = useState([]);
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [shownConsultants, setShownConsultants] = useState(() => new Set()); // empty means all consultants
 
   useEffect(() => {
     const params = user.role === 'admin' ? {} : { mine: 'true' };
@@ -119,10 +120,37 @@ export default function Calendar() {
     return { logsByDay, periods, colours: assignColours(colourPeriods), assignmentById };
   }, [assignments, entries, today]);
 
+  // Everyone with a log or an assignment on the calendar, so also consultants who were deactivated later
+  const consultants = useMemo(() => {
+    const byId = new Map();
+    for (const c of [...entries.map((e) => e.consultant), ...assignments.flatMap((a) => a.consultants || [])]) {
+      if (c?._id) byId.set(c._id, c);
+    }
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [assignments, entries]);
+
+  const showAll = shownConsultants.size === 0;
   const days = monthGrid(month.year, month.month);
   // Past days (up to today) show what was logged, future days the assignments that will be running
-  const logsOn = (key) => (key <= today ? logsByDay[key] || [] : []);
-  const runningOn = (key) => (key > today ? periods.filter((p) => p.start <= key && key <= p.end) : []);
+  const logsOn = (key) =>
+    key <= today ? (logsByDay[key] || []).filter((e) => showAll || shownConsultants.has(e.consultant?._id)) : [];
+  const runningOn = (key) =>
+    key > today
+      ? periods.filter(
+          (p) =>
+            p.start <= key &&
+            key <= p.end &&
+            (showAll || p.assignment.consultants?.some((c) => shownConsultants.has(c?._id)))
+        )
+      : [];
+
+  function toggleConsultant(id) {
+    setShownConsultants((shown) => {
+      const next = new Set(shown);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
 
   function shiftMonth(delta) {
     setMonth(({ year, month: m }) => {
@@ -160,6 +188,28 @@ export default function Calendar() {
       {loading ? (
         <p className="muted">Loading…</p>
       ) : (
+        <>
+        {user.role === 'admin' && consultants.length > 1 && (
+          <div className="calendar-consultants" role="group" aria-label="Show consultants">
+            <button
+              className={`btn btn-sm${showAll ? ' btn-primary' : ''}`}
+              aria-pressed={showAll}
+              onClick={() => setShownConsultants(new Set())}
+            >
+              All consultants
+            </button>
+            {consultants.map((c) => (
+              <button
+                key={c._id}
+                className={`btn btn-sm${shownConsultants.has(c._id) ? ' btn-primary' : ''}`}
+                aria-pressed={shownConsultants.has(c._id)}
+                onClick={() => toggleConsultant(c._id)}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="calendar-layout">
           <div className="card calendar-card">
             <div className="calendar-toolbar">
@@ -286,6 +336,7 @@ export default function Calendar() {
             )}
           </div>
         </div>
+        </>
       )}
     </div>
   );
