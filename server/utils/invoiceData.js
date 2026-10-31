@@ -19,25 +19,24 @@ function buildInvoice(client, entries, nonBillableEntries) {
     assignment.amount = roundCents(assignment.amount + entry.amount);
   }
 
-  const sum = (field) => roundCents(entries.reduce((total, e) => total + (e[field] || 0), 0));
-  const amount = sum('amount');
-  const travelAmount = sum('travelAmount');
-  const totalExclVat = roundCents(amount + travelAmount);
-  const vatAmount = client.vatExempt ? 0 : roundCents(totalExclVat * VAT_RATE);
-
   return {
     client,
     assignments: [...assignments.values()],
     travel: onfact.travelLine(entries),
     entries: entries.length,
     nonBillableEntries,
-    amount,
-    travelAmount,
-    totalExclVat,
-    vatAmount,
-    totalInclVat: roundCents(totalExclVat + vatAmount),
+    ...invoiceTotals(entries, client.vatExempt),
     vatRate: VAT_RATE,
   };
+}
+
+function invoiceTotals(entries, vatExempt) {
+  const sum = (field) => roundCents(entries.reduce((total, e) => total + (e[field] || 0), 0));
+  const amount = sum('amount');
+  const travelAmount = sum('travelAmount');
+  const totalExclVat = roundCents(amount + travelAmount);
+  const vatAmount = vatExempt ? 0 : roundCents(totalExclVat * VAT_RATE);
+  return { amount, travelAmount, totalExclVat, vatAmount, totalInclVat: roundCents(totalExclVat + vatAmount) };
 }
 
 // All time not yet invoiced, as one invoice per client. Non-billable entries are never charged, so they are
@@ -79,4 +78,4 @@ async function pdfDetails(invoice, { brand, number, date }) {
   };
 }
 
-module.exports = { buildInvoice, openInvoices, pdfDetails };
+module.exports = { buildInvoice, invoiceTotals, openInvoices, pdfDetails };

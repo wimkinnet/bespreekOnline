@@ -6,7 +6,7 @@ const Document = require('../models/Document');
 const Setting = require('../models/Setting');
 const { protect, requireRole } = require('../middleware/auth');
 const onfact = require('../utils/onfact');
-const { openInvoices, pdfDetails } = require('../utils/invoiceData');
+const { invoiceTotals, openInvoices, pdfDetails } = require('../utils/invoiceData');
 const { renderInvoicePdf, renderInvoiceBuffer } = require('../utils/invoicePdf');
 
 router.use(protect, requireRole('admin'));
@@ -46,6 +46,30 @@ router.get('/open', async (req, res) => {
     );
   } catch (err) {
     res.status(500).json({ message: 'Could not load the time to invoice.', error: err.message });
+  }
+});
+
+// GET /api/invoices/created - the invoices made so far, newest number first
+router.get('/created', async (req, res) => {
+  try {
+    const documents = await Document.find({ invoiceNumber: { $exists: true } })
+      .populate('client', 'name vatNumber vatExempt')
+      .sort({ invoiceNumber: -1 });
+    const entries = await TimeEntry.find({ invoiceNumber: { $in: documents.map((d) => d.invoiceNumber) } }).select(
+      'invoiceNumber amount travelAmount'
+    );
+    res.json(
+      documents.map((d) => ({
+        _id: d._id,
+        invoiceNumber: d.invoiceNumber,
+        originalName: d.originalName,
+        createdAt: d.createdAt,
+        client: d.client,
+        ...invoiceTotals(entries.filter((e) => e.invoiceNumber === d.invoiceNumber), d.client?.vatExempt),
+      }))
+    );
+  } catch (err) {
+    res.status(500).json({ message: 'Could not load the invoices.', error: err.message });
   }
 });
 

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
-import { formatEUR } from '../utils/format';
+import { formatEUR, formatDate } from '../utils/format';
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState([]);
+  const [created, setCreated] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(null); // id of the client whose PDF is being made
@@ -11,9 +12,11 @@ export default function Invoices() {
   const [issuing, setIssuing] = useState(null); // id of the client whose invoice is being created
 
   function load() {
-    return api
-      .get('/invoices/open')
-      .then(({ data }) => setInvoices(data))
+    return Promise.all([api.get('/invoices/open'), api.get('/invoices/created')])
+      .then(([open, made]) => {
+        setInvoices(open.data);
+        setCreated(made.data);
+      })
       .catch((err) => setError(err.response?.data?.message || 'Could not load the time to invoice.'))
       .finally(() => setLoading(false));
   }
@@ -84,6 +87,15 @@ export default function Invoices() {
     }
   }
 
+  async function downloadCreated(invoice) {
+    setError('');
+    try {
+      await saveFile(`/documents/${invoice._id}/download`, invoice.originalName);
+    } catch {
+      setError(`Could not download invoice ${invoice.invoiceNumber}.`);
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -147,6 +159,50 @@ export default function Invoices() {
                         {issuing === i.client._id ? 'Creating…' : 'Create invoice'}
                       </button>
                     </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <h2 style={{ margin: '24px 0 10px' }}>Created invoices</h2>
+      <div className="table-wrap" style={{ overflowX: 'auto' }}>
+        {loading ? (
+          <div className="empty-state">Loading…</div>
+        ) : created.length === 0 ? (
+          <div className="empty-state">No invoices created yet.</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Date</th>
+                <th>Client</th>
+                <th>VAT number</th>
+                <th>Total excl. VAT</th>
+                <th>VAT</th>
+                <th>Total incl. VAT</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {created.map((i) => (
+                <tr key={i._id}>
+                  <td>
+                    <strong>{i.invoiceNumber}</strong>
+                  </td>
+                  <td>{formatDate(i.createdAt)}</td>
+                  <td>{i.client?.name}</td>
+                  <td>{i.client?.vatNumber || <span className="muted">None</span>}</td>
+                  <td>{formatEUR(i.totalExclVat)}</td>
+                  <td>{i.client?.vatExempt ? <span className="muted">No VAT</span> : formatEUR(i.vatAmount)}</td>
+                  <td>{formatEUR(i.totalInclVat)}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button className="btn btn-sm" onClick={() => downloadCreated(i)}>
+                      Download
+                    </button>
                   </td>
                 </tr>
               ))}
