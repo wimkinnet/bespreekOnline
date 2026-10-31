@@ -170,6 +170,17 @@ export default function ClientDetail() {
 
   if (loading || !client) return <p className="muted">Loading…</p>;
 
+  const billingAddress = client.billing?.address;
+  const billingCity = [billingAddress?.postalCode, billingAddress?.city].filter(Boolean).join(' ');
+  const billingLines = [
+    client.billing?.contactName,
+    client.billing?.contactEmail,
+    billingAddress?.street,
+    billingCity && billingAddress?.country && billingAddress.country !== 'Belgium'
+      ? `${billingCity}, ${billingAddress.country}`
+      : billingCity,
+  ].filter(Boolean);
+
   return (
     <div>
       <div className="page-header">
@@ -249,6 +260,18 @@ export default function ClientDetail() {
             </p>
           </div>
         </div>
+        {billingLines.length > 0 && (
+          <>
+            <div className="muted" style={{ fontSize: 12, margin: '14px 0 4px' }}>
+              BILLING
+            </div>
+            {billingLines.map((line) => (
+              <p key={line} style={{ marginBottom: 2 }}>
+                {line}
+              </p>
+            ))}
+          </>
+        )}
         {client.type === 'school' && user.role === 'admin' && (
           <>
             <div className="muted" style={{ fontSize: 12, margin: '14px 0 4px' }}>

@@ -62,26 +62,34 @@ function buildLines(entries, vatPercent) {
   return lines;
 }
 
+// A billing address replaces the whole client address, so the two are never mixed on an invoice
+function billingAddress(client) {
+  const billing = client.billing?.address;
+  return billing?.street || billing?.postalCode || billing?.city ? billing : client.address;
+}
+
 function buildInvoice(client, entries, vatRate) {
-  const countryName = client.address?.country || 'Belgium';
+  const address = billingAddress(client);
+  const countryName = address?.country || 'Belgium';
   const country = COUNTRIES[countryName];
   if (!country) throw new OnFactError(`Country "${countryName}" is not supported for invoicing.`);
   if (client.vatExempt && country.code === 'BEL') {
     throw new OnFactError('This client is invoiced without VAT as a foreign client, but its country is Belgium.');
   }
 
-  const { street, number } = splitStreet(client.address?.street);
+  const { street, number } = splitStreet(address?.street);
   const invoice = {
     vattype: 'excl',
     automatic_reminders: false, // an invoice waiting to be sent must not trigger a payment reminder
     vat_exception: '03', // standard Belgian VAT
     customer_name: client.name,
+    customer_attn: client.billing?.contactName || client.contactName || undefined,
     customer_street: street || undefined,
     customer_streetnumber: number,
-    customer_citycode: client.address?.postalCode || undefined,
-    customer_city: client.address?.city || undefined,
+    customer_citycode: address?.postalCode || undefined,
+    customer_city: address?.city || undefined,
     customer_vat: client.vatNumber || undefined,
-    customer_email: client.contactEmail || undefined,
+    customer_email: client.billing?.contactEmail || client.contactEmail || undefined,
     country_id: country.code,
     invoice_lines: buildLines(entries, client.vatExempt ? 0 : Math.round(vatRate * 100)),
   };

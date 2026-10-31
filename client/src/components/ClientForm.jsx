@@ -15,6 +15,12 @@ export const emptyClientForm = {
   postalCode: '',
   city: '',
   country: 'Belgium',
+  billingContactName: '',
+  billingContactEmail: '',
+  billingStreet: '',
+  billingPostalCode: '',
+  billingCity: '',
+  billingCountry: 'Belgium',
   status: 'active',
   notes: '',
 };
@@ -34,6 +40,12 @@ export function clientToForm(client) {
     postalCode: client.address?.postalCode || '',
     city: client.address?.city || '',
     country: client.address?.country || 'Belgium',
+    billingContactName: client.billing?.contactName || '',
+    billingContactEmail: client.billing?.contactEmail || '',
+    billingStreet: client.billing?.address?.street || '',
+    billingPostalCode: client.billing?.address?.postalCode || '',
+    billingCity: client.billing?.address?.city || '',
+    billingCountry: client.billing?.address?.country || 'Belgium',
     status: client.status || 'active',
     notes: client.notes || '',
   };
@@ -53,6 +65,16 @@ export function formToPayload(form) {
     vatExempt: form.vatExempt,
     notes: form.notes,
     address: { street: form.street, postalCode: form.postalCode, city: form.city, country: form.country },
+    billing: {
+      contactName: form.billingContactName,
+      contactEmail: form.billingContactEmail,
+      address: {
+        street: form.billingStreet,
+        postalCode: form.billingPostalCode,
+        city: form.billingCity,
+        country: form.billingCountry,
+      },
+    },
   };
 }
 
@@ -138,7 +160,7 @@ export default function ClientForm({ initial = emptyClientForm, groups, excludeI
         Foreign client: invoice without VAT
       </label>
       <div className="field">
-        <label>Street & number</label>
+        <label>Street & number (used for travel)</label>
         <input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} />
       </div>
       <div className="field-row">
@@ -159,6 +181,55 @@ export default function ClientForm({ initial = emptyClientForm, groups, excludeI
               </option>
             ))}
             {!COUNTRIES.includes(form.country) && <option value={form.country}>{form.country}</option>}
+          </select>
+        </div>
+      </div>
+      <h3>Billing details</h3>
+      <p className="muted" style={{ marginBottom: 10 }}>
+        Only if invoices go elsewhere. Anything left empty uses the contact and address above.
+      </p>
+      <div className="field-row">
+        <div className="field">
+          <label>Billing contact name</label>
+          <input
+            value={form.billingContactName}
+            onChange={(e) => setForm({ ...form, billingContactName: e.target.value })}
+          />
+        </div>
+        <div className="field">
+          <label>Billing email</label>
+          <input
+            type="email"
+            value={form.billingContactEmail}
+            onChange={(e) => setForm({ ...form, billingContactEmail: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="field">
+        <label>Billing street & number</label>
+        <input value={form.billingStreet} onChange={(e) => setForm({ ...form, billingStreet: e.target.value })} />
+      </div>
+      <div className="field-row">
+        <div className="field">
+          <label>Postal code</label>
+          <input
+            value={form.billingPostalCode}
+            onChange={(e) => setForm({ ...form, billingPostalCode: e.target.value })}
+          />
+        </div>
+        <div className="field">
+          <label>City</label>
+          <input value={form.billingCity} onChange={(e) => setForm({ ...form, billingCity: e.target.value })} />
+        </div>
+        <div className="field">
+          <label>Country</label>
+          <select value={form.billingCountry} onChange={(e) => setForm({ ...form, billingCountry: e.target.value })}>
+            {COUNTRIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+            {!COUNTRIES.includes(form.billingCountry) && <option value={form.billingCountry}>{form.billingCountry}</option>}
           </select>
         </div>
       </div>

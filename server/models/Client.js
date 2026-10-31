@@ -7,11 +7,23 @@ const clientSchema = new mongoose.Schema(
     // A school may optionally belong to a school group (scholengroep); school groups and 'other' clients have no parent.
     // Assignments can be linked to either a school or a school group.
     parentPool: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', default: null },
+    // Where the consultant goes; used for travel distances
     address: {
       street: String,
       postalCode: String,
       city: String,
       country: { type: String, default: 'Belgium' },
+    },
+    // Only when invoices go elsewhere; anything left empty falls back to the fields above when invoicing
+    billing: {
+      contactName: { type: String, trim: true },
+      contactEmail: { type: String, trim: true },
+      address: {
+        street: String,
+        postalCode: String,
+        city: String,
+        country: String,
+      },
     },
     vatNumber: { type: String, trim: true },
     // Foreign client: invoiced without Belgian VAT (reverse charge)

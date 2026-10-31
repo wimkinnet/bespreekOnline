@@ -78,6 +78,11 @@ async function seed() {
     name: 'Testcollege Sint-Voorbeeld',
     type: 'school',
     address: { street: 'Collegelaan 3', postalCode: '2800', city: 'Mechelen' },
+    billing: {
+      contactName: 'Fien Boekhouding',
+      contactEmail: 'facturen@example.com',
+      address: { street: 'Facturatielaan 9', postalCode: '2000', city: 'Antwerpen', country: 'Belgium' },
+    },
     ...contact('Carla Test'),
   });
   const other = await Client.create({
