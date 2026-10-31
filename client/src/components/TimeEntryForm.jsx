@@ -275,7 +275,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
                   {selectedAssignment.billingType === 'hourly'
                     ? 'Hours worked'
                     : selectedAssignment.billingType === 'daily'
-                      ? 'Days worked (0.25 = a quarter of a day)'
+                      ? 'Days worked (steps of 0.05, e.g. 0.25 = a quarter of a day)'
                       : selectedAssignment.billingType === 'half_day'
                         ? 'Days worked (0.5 = one half day)'
                         : 'Hours worked (optional, for tracking)'}
@@ -283,7 +283,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
                 <input
                   type="number"
                   min="0"
-                  step={selectedAssignment.billingType === 'half_day' ? '0.5' : '0.25'}
+                  step={selectedAssignment.billingType === 'half_day' ? '0.5' : '0.05'}
                   required={selectedAssignment.billingType !== 'fixed'}
                   value={form.amountValue}
                   onChange={(e) => setForm({ ...form, amountValue: e.target.value })}

@@ -90,8 +90,9 @@ function validateLogged(billingType, { hours, days }) {
   if (['daily', 'half_day'].includes(billingType) && !Number(days)) {
     return 'This assignment is billed per (half) day - enter days.';
   }
-  if (billingType === 'daily' && (days * 4) % 1 !== 0) {
-    return 'This assignment is billed per day - enter days in steps of 0.25.';
+  // Rounded before comparing, because e.g. 0.15 * 20 is not exactly 3 in floating point
+  if (billingType === 'daily' && Math.abs(days * 20 - Math.round(days * 20)) > 1e-9) {
+    return 'This assignment is billed per day - enter days in steps of 0.05.';
   }
   if (billingType === 'half_day' && (days * 2) % 1 !== 0) {
     return 'This assignment is billed per half day - enter days in steps of 0.5.';
