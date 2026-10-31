@@ -7,6 +7,7 @@ export default function Invoices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(null); // id of the client whose PDF is being made
+  const [brands, setBrands] = useState({}); // chosen brand per client id; bespreek unless changed
 
   useEffect(() => {
     api
@@ -20,11 +21,14 @@ export default function Invoices() {
     setCreating(client._id);
     setError('');
     try {
-      const res = await api.get(`/invoices/${client._id}/pdf`, { responseType: 'blob' });
+      const res = await api.get(`/invoices/${client._id}/pdf`, {
+        params: { brand: brands[client._id] || 'bespreek' },
+        responseType: 'blob',
+      });
       const url = URL.createObjectURL(res.data);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `factuurspecificatie_${client.name.replace(/[^\w-]+/g, '_')}.pdf`;
+      link.download = `overzicht-prestaties_${client.name.replace(/[^\w-]+/g, '_')}.pdf`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -89,9 +93,20 @@ export default function Invoices() {
                   <td>{i.client.vatExempt ? <span className="muted">No VAT</span> : formatEUR(i.vatAmount)}</td>
                   <td>{formatEUR(i.totalInclVat)}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn-sm" onClick={() => downloadPdf(i.client)} disabled={creating === i.client._id}>
-                      {creating === i.client._id ? 'Creating…' : 'PDF'}
-                    </button>
+                    <div className="row-actions">
+                      <select
+                        aria-label={`Brand on the PDF for ${i.client.name}`}
+                        style={{ width: 'auto' }}
+                        value={brands[i.client._id] || 'bespreek'}
+                        onChange={(e) => setBrands({ ...brands, [i.client._id]: e.target.value })}
+                      >
+                        <option value="bespreek">bespreek</option>
+                        <option value="catalista">Catalista</option>
+                      </select>
+                      <button className="btn btn-sm" onClick={() => downloadPdf(i.client)} disabled={creating === i.client._id}>
+                        {creating === i.client._id ? 'Creating…' : 'PDF'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

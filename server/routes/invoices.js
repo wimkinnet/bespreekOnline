@@ -52,7 +52,8 @@ async function openInvoices(filter = {}) {
   const entries = await TimeEntry.find({ ...filter, invoiced: { $ne: true } })
     .sort({ date: 1 })
     .populate('client')
-    .populate('assignment', 'title');
+    .populate('assignment', 'title')
+    .populate('consultant', 'name');
   const billable = new Map();
   const nonBillable = new Map();
   for (const entry of entries) {
@@ -87,7 +88,7 @@ router.get('/open', async (req, res) => {
   }
 });
 
-// GET /api/invoices/:clientId/pdf - specification of one client; marks nothing as invoiced
+// GET /api/invoices/:clientId/pdf?brand=bespreek|catalista - specification of one client; marks nothing as invoiced
 router.get('/:clientId/pdf', async (req, res) => {
   try {
     const [invoice] = await openInvoices({ client: req.params.clientId });
@@ -97,10 +98,11 @@ router.get('/:clientId/pdf', async (req, res) => {
     const setting = await Setting.findOne({ key: 'company' });
     const safeName = client.name.replace(/[^\w-]+/g, '_');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="factuurspecificatie_${safeName}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="overzicht-prestaties_${safeName}.pdf"`);
     renderInvoicePdf(
       {
         ...invoice,
+        brand: req.query.brand,
         company: setting?.toObject().company || {},
         address: onfact.billingAddress(client) || {},
         contactName: client.billing?.contactName || client.contactName,

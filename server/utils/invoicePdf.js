@@ -1,3 +1,4 @@
+const path = require('path');
 const PDFDocument = require('pdfkit');
 
 // Renders the time to invoice for one client, in Dutch, as an A4 PDF to use with an invoice in OnFact.
@@ -7,6 +8,13 @@ const INK = '#14302f';
 const SOFT = '#4a5e5d';
 const LINE = '#d9e3e3';
 const ACCENT = '#00807d';
+const asset = (file) => path.join(__dirname, '..', 'assets', file);
+// Who the PDF is presented as; the legal details are always those of the company itself
+const BRANDS = {
+  bespreek: { logo: asset('bespreek-logo.png'), size: 56 },
+  catalista: { tradeName: 'Catalista', logo: asset('catalista-logo.png'), size: 72 },
+};
+const TITLE = 'Overzicht prestaties';
 
 const eur = (n) => new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(n);
 const num = (n) => new Intl.NumberFormat('nl-BE', { maximumFractionDigits: 2 }).format(n);
@@ -15,8 +23,8 @@ const day = (d) =>
 
 function quantityLabel(entry) {
   if (entry.billingType === 'hourly') return `${num(entry.hours)} u`;
-  if (entry.billingType === 'daily') return `${num(entry.days)} dag`;
-  if (entry.billingType === 'half_day') return `${num(entry.days * 2)} halve dag`;
+  if (entry.billingType === 'daily') return `${num(entry.days)} ${entry.days > 1 ? 'dagen' : 'dag'}`;
+  if (entry.billingType === 'half_day') return `${num(entry.days * 2)} ${entry.days > 0.5 ? 'halve dagen' : 'halve dag'}`;
   return 'Vast bedrag';
 }
 
@@ -38,17 +46,19 @@ function addressLines(address) {
 }
 
 module.exports = function renderInvoicePdf(invoice, stream) {
-  const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true, info: { Title: 'Factuurspecificatie' } });
+  const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true, info: { Title: TITLE } });
   doc.pipe(stream);
   const left = doc.page.margins.left;
   const width = doc.page.width - left - doc.page.margins.right;
   const bottom = () => doc.page.height - doc.page.margins.bottom - 20;
 
-  doc.fillColor(INK).font('Helvetica-Bold').fontSize(20).text('Factuurspecificatie', left, 50);
+  const brand = BRANDS[invoice.brand] || BRANDS.bespreek;
+  doc.image(brand.logo, left + width - brand.size, 40, { fit: [brand.size, brand.size] });
+  doc.fillColor(INK).font('Helvetica-Bold').fontSize(20).text(TITLE, left, 50);
   doc.font('Helvetica').fontSize(10.5).fillColor(SOFT).text(`Opgesteld op ${day(new Date())}`);
 
   // Parties
-  let y = 100;
+  let y = 120;
   const colW = width / 2 - 10;
   const party = (title, name, lines, x) => {
     doc.font('Helvetica-Bold').fontSize(8.5).fillColor(ACCENT).text(title.toUpperCase(), x, y, { width: colW, characterSpacing: 0.5 });
@@ -60,8 +70,8 @@ module.exports = function renderInvoicePdf(invoice, stream) {
   const { company, client } = invoice;
   const endA = party(
     'Van',
-    company.name,
-    [...addressLines(company), ...(company.enterpriseNumber ? [`Btw ${company.enterpriseNumber}`] : [])],
+    brand.tradeName || company.name,
+    [...(brand.tradeName ? [`merk van ${company.name}`] : []), ...addressLines(company), ...(company.enterpriseNumber ? [`Btw ${company.enterpriseNumber}`] : [])],
     left
   );
   const endB = party(
@@ -77,13 +87,15 @@ module.exports = function renderInvoicePdf(invoice, stream) {
   y = Math.max(endA, endB) + 20;
 
   // Time per assignment
-  const cols = [
+  const columns = (withConsultant) => [
     { label: 'Datum', w: 62 },
-    { label: 'Omschrijving', w: width - 302 },
+    ...(withConsultant ? [{ label: 'Consultant', w: 85 }] : []),
+    { label: 'Omschrijving', w: width - 302 - (withConsultant ? 85 : 0) },
     { label: 'Aantal', w: 70, align: 'right' },
     { label: 'Tarief', w: 95, align: 'right' },
     { label: 'Bedrag', w: 75, align: 'right' },
   ];
+  let cols = columns(false);
   const drawRow = (values, { bold = false, header = false } = {}) => {
     doc.font(bold || header ? 'Helvetica-Bold' : 'Helvetica').fontSize(header ? 8 : 9).fillColor(header ? SOFT : INK);
     const h = Math.max(...values.map((v, i) => doc.heightOfString(String(v), { width: cols[i].w - 6 }))) + 8;
@@ -113,12 +125,24 @@ module.exports = function renderInvoicePdf(invoice, stream) {
 
   heading(`Klant: ${client.name}`, { size: 11.5, color: ACCENT, needed: 90 });
   for (const assignment of invoice.assignments) {
-    heading(`Opdracht: ${assignment.title}`, { size: 10, color: INK, needed: 70 });
+    // One consultant goes next to the assignment; with several, each line names its own
+    const names = [...new Set(assignment.entries.map((e) => e.consultant?.name || ''))];
+    const perLine = names.length > 1;
+    const title = `Opdracht: ${assignment.title}`;
+    heading(perLine || !names[0] ? title : `${title} - Consultant: ${names[0]}`, { size: 10, color: INK, needed: 70 });
+    cols = columns(perLine);
     drawRow(cols.map((c) => c.label), { header: true });
     for (const entry of assignment.entries) {
-      drawRow([day(entry.date), entry.description || '', quantityLabel(entry), rateLabel(entry), eur(entry.amount)]);
+      drawRow([
+        day(entry.date),
+        ...(perLine ? [entry.consultant?.name || ''] : []),
+        entry.description || '',
+        quantityLabel(entry),
+        rateLabel(entry),
+        eur(entry.amount),
+      ]);
     }
-    drawRow(['', 'Subtotaal opdracht', '', '', eur(assignment.amount)], { bold: true });
+    drawRow(['', ...(perLine ? [''] : []), 'Subtotaal opdracht', '', '', eur(assignment.amount)], { bold: true });
     y += 12;
   }
 
