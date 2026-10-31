@@ -53,9 +53,8 @@ cd client && npm run dev:test        # open http://localhost:5174
 ```
 
 Log in with `test.admin@example.com` or `test.consultant@example.com`, password
-`test1234`. Invoices sent to the simulated OnFact can be read at
-http://localhost:5003/v1/invoices.json. A client with "FAIL" in its name gets a
-simulated OnFact error.
+`test1234`. The simulated OnFact is unused for now: nothing in the app sends
+invoices to OnFact directly. Invoices are made on the Invoices tab.
 
 ## Local setup
 

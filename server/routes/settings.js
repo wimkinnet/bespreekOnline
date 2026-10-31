@@ -5,7 +5,7 @@ const { protect, requireRole } = require('../middleware/auth');
 
 router.use(protect, requireRole('admin'));
 
-const COMPANY_FIELDS = ['name', 'street', 'postalCode', 'city', 'country', 'enterpriseNumber'];
+const COMPANY_FIELDS = ['name', 'street', 'postalCode', 'city', 'country', 'enterpriseNumber', 'iban'];
 
 // GET /api/settings/company - the company's legal details, as printed on expense claims
 router.get('/company', async (req, res) => {

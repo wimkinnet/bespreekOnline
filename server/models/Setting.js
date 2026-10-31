@@ -11,7 +11,9 @@ const settingSchema = new mongoose.Schema(
       city: { type: String, trim: true },
       country: { type: String, trim: true, default: 'België' },
       enterpriseNumber: { type: String, trim: true }, // KBO / VAT number, e.g. BE 0123.456.789
+      iban: { type: String, trim: true }, // the account invoices are paid to
     },
+    sequence: { type: Number }, // last invoice number used, in the document 'invoiceSequence:<year>'
   },
   { timestamps: true }
 );

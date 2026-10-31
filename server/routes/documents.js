@@ -62,9 +62,14 @@ router.post('/', upload.single('file'), async (req, res) => {
 // GET /api/documents/:id/download
 router.get('/:id/download', async (req, res) => {
   try {
-    const doc = await Document.findById(req.params.id);
+    const doc = await Document.findById(req.params.id).select('+pdf');
     if (!doc || (doc.category === 'bill' && !canSeeBill(doc, req.user))) {
       return res.status(404).json({ message: 'Document not found.' });
+    }
+    if (doc.pdf) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${doc.originalName}"`);
+      return res.send(doc.pdf);
     }
 
     const filePath = path.join(UPLOAD_ROOT, doc.client.toString(), doc.storedFileName);
@@ -86,6 +91,9 @@ router.delete('/:id', async (req, res) => {
     const isUploader = doc.uploadedBy && doc.uploadedBy.toString() === req.user._id.toString();
     if (req.user.role !== 'admin' && !isUploader) {
       return res.status(403).json({ message: 'You can only delete files you uploaded.' });
+    }
+    if (doc.invoiceNumber) {
+      return res.status(400).json({ message: 'A created invoice cannot be deleted.' });
     }
 
     const filePath = path.join(UPLOAD_ROOT, doc.client.toString(), doc.storedFileName);

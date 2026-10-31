@@ -94,7 +94,6 @@ export default function Reports() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [invoicing, setInvoicing] = useState(false);
   const [loadedPeriod, setLoadedPeriod] = useState(null); // period the shown numbers belong to
   const [claimFor, setClaimFor] = useState(null); // consultant row whose km expense claim is open
   const [groupBy, setGroupBy] = useState('client');
@@ -105,45 +104,6 @@ export default function Reports() {
     setReport(data);
     setLoadedPeriod({ from, to });
     setLoading(false);
-  }
-
-  // Confirm the shown numbers, then mark every time log of the period as invoiced
-  async function invoicePeriod() {
-    const { entries, amount, travelAmount, totalExclVat, vatAmount, totalInclVat } = report.toInvoice;
-    const ok = window.confirm(
-      `Invoice ${loadedPeriod.from} – ${loadedPeriod.to}?\n\n` +
-        `${entries} time log${entries === 1 ? '' : 's'} not yet invoiced\n` +
-        `Amount: ${formatEUR(amount)}\n` +
-        `Travel: ${formatEUR(travelAmount)}\n` +
-        `Total excl. VAT: ${formatEUR(totalExclVat)}\n` +
-        `VAT ${Math.round(report.vatRate * 100)}%: ${formatEUR(vatAmount)}\n` +
-        `Total incl. VAT: ${formatEUR(totalInclVat)}\n\n` +
-        (report.onfactEnabled ? 'One invoice per client will be created in OnFact, with its official number. They are not sent to clients yet: review and send them from OnFact. ' : '') +
-        'These logs will be marked as invoiced. Completed assignments with all logs invoiced become Invoiced, which is final.'
-    );
-    if (!ok) return;
-    setInvoicing(true);
-    try {
-      const { data } = await api.post('/reports/invoice', loadedPeriod);
-      const closed = data.assignmentsInvoiced;
-      const onfactInvoices = data.invoices || [];
-      const onfactErrors = data.errors || [];
-      alert(
-        `${data.entriesInvoiced} time log${data.entriesInvoiced === 1 ? '' : 's'} marked as invoiced.` +
-          (onfactInvoices.length
-            ? `\n\nCreated in OnFact:\n- ${onfactInvoices.map((i) => `${i.clientName} (#${i.id})`).join('\n- ')}`
-            : '') +
-          (onfactErrors.length
-            ? `\n\nNOT invoiced, these logs stay open:\n- ${onfactErrors.map((e) => `${e.clientName}: ${e.message}`).join('\n- ')}`
-            : '') +
-          (closed.length ? `\n\nAssignments now invoiced:\n- ${closed.join('\n- ')}` : '')
-      );
-      await load();
-    } catch (err) {
-      alert(err.response?.data?.message || 'Could not invoice this period.');
-    } finally {
-      setInvoicing(false);
-    }
   }
 
   const periodChanged = loadedPeriod && (loadedPeriod.from !== from || loadedPeriod.to !== to);
@@ -215,27 +175,6 @@ export default function Reports() {
         <button className="btn" onClick={exportByClient} disabled={exporting}>
           {exporting ? 'Exporting…' : 'Export to Excel'}
         </button>
-        {report && (
-          <button
-            className="btn btn-primary"
-            style={{ marginLeft: 'auto' }}
-            onClick={invoicePeriod}
-            disabled={invoicing || loading || periodChanged || report.toInvoice.entries === 0}
-            title={
-              periodChanged
-                ? 'Click Update first so the numbers match the selected period.'
-                : report.toInvoice.entries === 0
-                  ? 'All time logs in this period are already invoiced.'
-                  : ''
-            }
-          >
-            {invoicing
-              ? 'Invoicing…'
-              : report.toInvoice.entries === 0
-                ? 'Period invoiced'
-                : `Validate & invoice (${report.toInvoice.entries})`}
-          </button>
-        )}
       </div>
 
       {report && (

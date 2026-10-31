@@ -11,11 +11,15 @@ const documentSchema = new mongoose.Schema(
     size: { type: Number }, // bytes
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     notes: { type: String, trim: true },
+    // A created invoice: its number, and the PDF itself so the record does not depend on the server's disk
+    invoiceNumber: { type: String },
+    pdf: { type: Buffer, select: false },
   },
   { timestamps: true }
 );
 
 documentSchema.index({ client: 1 });
 documentSchema.index({ assignment: 1 });
+documentSchema.index({ invoiceNumber: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('Document', documentSchema);

@@ -1,110 +1,31 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
-const path = require('path');
-const { pipeline } = require('stream/promises');
 const { PassThrough } = require('stream');
 const TimeEntry = require('../models/TimeEntry');
 const Document = require('../models/Document');
-const Assignment = require('../models/Assignment');
 const Setting = require('../models/Setting');
 const { protect, requireRole } = require('../middleware/auth');
 const onfact = require('../utils/onfact');
-const renderInvoicePdf = require('../utils/invoicePdf');
-const { UPLOAD_ROOT } = require('../middleware/upload');
+const { openInvoices, pdfDetails } = require('../utils/invoiceData');
+const { renderInvoicePdf, renderInvoiceBuffer } = require('../utils/invoicePdf');
 
 router.use(protect, requireRole('admin'));
-
-const VAT_RATE = 0.21;
-
-function roundCents(n) {
-  return Math.round(n * 100) / 100;
-}
-
-// The billable entries of one client, per assignment, with the totals of the invoice
-function buildInvoice(client, entries, nonBillableEntries) {
-  const assignments = new Map();
-  for (const entry of entries) {
-    const key = String(entry.assignment?._id);
-    if (!assignments.has(key)) assignments.set(key, { title: entry.assignment?.title || '—', amount: 0, entries: [] });
-    const assignment = assignments.get(key);
-    assignment.entries.push(entry);
-    assignment.amount = roundCents(assignment.amount + entry.amount);
-  }
-
-  const sum = (field) => roundCents(entries.reduce((total, e) => total + (e[field] || 0), 0));
-  const amount = sum('amount');
-  const travelAmount = sum('travelAmount');
-  const totalExclVat = roundCents(amount + travelAmount);
-  const vatAmount = client.vatExempt ? 0 : roundCents(totalExclVat * VAT_RATE);
-
-  return {
-    client,
-    assignments: [...assignments.values()],
-    travel: onfact.travelLine(entries),
-    entries: entries.length,
-    nonBillableEntries,
-    amount,
-    travelAmount,
-    totalExclVat,
-    vatAmount,
-    totalInclVat: roundCents(totalExclVat + vatAmount),
-    vatRate: VAT_RATE,
-  };
-}
-
-// All time not yet invoiced, as one invoice per client. Non-billable entries are never charged, so they are
-// only counted. A client without billable entries has nothing to invoice and is left out.
-async function openInvoices(filter = {}) {
-  const entries = await TimeEntry.find({ ...filter, invoiced: { $ne: true } })
-    .sort({ date: 1 })
-    .populate('client')
-    .populate('assignment', 'title')
-    .populate('consultant', 'name');
-  const billable = new Map();
-  const nonBillable = new Map();
-  for (const entry of entries) {
-    if (!entry.client) continue;
-    const key = String(entry.client._id);
-    const target = entry.billable === false ? nonBillable : billable;
-    target.set(key, [...(target.get(key) || []), entry]);
-  }
-  return [...billable.entries()]
-    .map(([key, list]) => buildInvoice(list[0].client, list, nonBillable.get(key)?.length || 0))
-    .sort((a, b) => a.client.name.localeCompare(b.client.name));
-}
 
 function safeFileName(client) {
   return client.name.replace(/[^\w-]+/g, '_');
 }
 
-// Everything the PDF shows besides the invoice itself. Refuses a country that does not fit the client's VAT treatment.
-async function pdfDetails(invoice, brand) {
-  const { client } = invoice;
-  const country = onfact.invoiceCountry(client);
-  const setting = await Setting.findOne({ key: 'company' });
-  return {
-    ...invoice,
-    brand,
-    company: setting?.toObject().company || {},
-    address: onfact.billingAddress(client) || {},
-    contactName: client.billing?.contactName || client.contactName,
-    vatNote: client.vatExempt ? onfact.reverseChargeNote(country) : null,
-  };
+// Today in Belgium, which is the invoice date and decides the year of the number
+function belgianDate() {
+  const [year, month, day] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date()).split('-');
+  return { year, iso: `${year}-${month}-${day}`, date: new Date(`${year}-${month}-${day}T00:00:00Z`) };
 }
 
-// The given assignments that have nothing left to bill. Non-billable entries are never on an invoice, so they do
-// not keep an assignment open.
-async function fullyInvoicedAssignments(assignmentIds) {
-  const assignments = await Assignment.find({ _id: { $in: assignmentIds }, status: { $ne: 'invoiced' } }).select('title');
-  const result = [];
-  for (const assignment of assignments) {
-    const open = { assignment: assignment._id, invoiced: { $ne: true } };
-    if (await TimeEntry.exists({ ...open, billable: { $ne: false } })) continue;
-    const nonBillableEntries = await TimeEntry.countDocuments(open);
-    result.push({ _id: assignment._id, title: assignment.title, nonBillableEntries });
-  }
-  return result;
+// YYNNNN: the last two digits of the year and a sequence stored per year
+async function nextInvoiceNumber(year) {
+  const key = `invoiceSequence:${year}`;
+  const { sequence } = await Setting.findOneAndUpdate({ key }, { $inc: { sequence: 1 } }, { upsert: true, new: true });
+  return { key, sequence, number: `${year.slice(-2)}${String(sequence).padStart(4, '0')}` };
 }
 
 // GET /api/invoices/open - what can still be invoiced, per client
@@ -128,26 +49,27 @@ router.get('/open', async (req, res) => {
   }
 });
 
-// GET /api/invoices/:clientId/pdf?brand=bespreek|catalista - specification of one client; marks nothing as invoiced
+// GET /api/invoices/:clientId/pdf?brand=bespreek|catalista - a concept without a number; changes nothing
 router.get('/:clientId/pdf', async (req, res) => {
   try {
     const [invoice] = await openInvoices({ client: req.params.clientId });
     if (!invoice) return res.status(404).json({ message: 'Nothing left to invoice for this client.' });
-    const details = await pdfDetails(invoice, req.query.brand);
+    const details = await pdfDetails(invoice, { brand: req.query.brand, date: belgianDate().date });
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="overzicht-prestaties_${safeFileName(invoice.client)}.pdf"`);
-    renderInvoicePdf(details, res);
+    res.setHeader('Content-Disposition', `attachment; filename="factuur-concept_${safeFileName(invoice.client)}.pdf"`);
+    const stream = new PassThrough();
+    stream.pipe(res);
+    renderInvoicePdf(details, stream);
   } catch (err) {
     if (err instanceof onfact.OnFactError) return res.status(400).json({ message: err.message });
     res.status(500).json({ message: 'Could not create the PDF.', error: err.message });
   }
 });
 
-// POST /api/invoices/:clientId/sent { brand, entries } - the client received this invoice: stores the PDF with the
+// POST /api/invoices/:clientId/create { brand, entries } - gives the invoice the next number, stores the PDF with the
 // client's bills and marks exactly the entries on it as invoiced. `entries` is the count the user confirmed.
-// Sending itself happens outside the app.
-router.post('/:clientId/sent', async (req, res) => {
-  let storedPath;
+router.post('/:clientId/create', async (req, res) => {
+  let issued;
   let storedDocument;
   try {
     const [invoice] = await openInvoices({ client: req.params.clientId });
@@ -156,58 +78,43 @@ router.post('/:clientId/sent', async (req, res) => {
       return res.status(409).json({ message: 'The time of this client has changed. Check the new numbers and try again.' });
     }
     const { client } = invoice;
-    const details = await pdfDetails(invoice, req.body.brand);
+    const { year, iso, date } = belgianDate();
+    await pdfDetails(invoice, { brand: req.body.brand, date }); // refuses a problem before a number is used
 
-    const today = new Date().toISOString().slice(0, 10);
-    const storedFileName = `${Date.now()}-overzicht-prestaties.pdf`;
-    const folder = path.join(UPLOAD_ROOT, String(client._id));
-    fs.mkdirSync(folder, { recursive: true });
-    storedPath = path.join(folder, storedFileName);
-    const pdf = new PassThrough();
-    renderInvoicePdf(details, pdf);
-    await pipeline(pdf, fs.createWriteStream(storedPath));
-
+    issued = await nextInvoiceNumber(year);
+    const { number } = issued;
+    const pdf = await renderInvoiceBuffer(await pdfDetails(invoice, { brand: req.body.brand, number, date }));
     storedDocument = await Document.create({
       client: client._id,
       category: 'bill',
-      originalName: `overzicht-prestaties_${safeFileName(client)}_${today}.pdf`,
-      storedFileName,
+      originalName: `factuur_${number}_${safeFileName(client)}.pdf`,
+      storedFileName: `invoice-${number}.pdf`,
       mimeType: 'application/pdf',
-      size: fs.statSync(storedPath).size,
+      size: pdf.length,
       uploadedBy: req.user._id,
+      notes: `Invoice date ${iso}`,
+      invoiceNumber: number,
+      pdf,
     });
 
     const entries = invoice.assignments.flatMap((a) => a.entries);
     const { modifiedCount } = await TimeEntry.updateMany(
       { _id: { $in: entries.map((e) => e._id) }, invoiced: { $ne: true } },
-      { $set: { invoiced: true, invoiceDocument: storedDocument._id } }
+      { $set: { invoiced: true, invoiceDocument: storedDocument._id, invoiceNumber: number } }
     );
-    const assignmentIds = [...new Set(entries.map((e) => e.assignment?._id).filter(Boolean))];
     res.json({
+      invoiceNumber: number,
       entriesInvoiced: modifiedCount,
-      document: storedDocument.originalName,
-      fullyInvoicedAssignments: await fullyInvoicedAssignments(assignmentIds),
+      document: { _id: storedDocument._id, originalName: storedDocument.originalName },
     });
   } catch (err) {
     if (err instanceof onfact.OnFactError) return res.status(400).json({ message: err.message });
-    // Nothing was marked, so nothing may stay behind that looks like a sent invoice
-    if (storedPath && fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+    // Nothing was marked, so no invoice may stay behind, and an unused last number goes back so the series has no gap
     if (storedDocument) await Document.deleteOne({ _id: storedDocument._id }).catch(() => {});
-    res.status(500).json({ message: 'Could not store this invoice.', error: err.message });
-  }
-});
-
-// POST /api/invoices/assignments/:id/close - the user confirmed this fully invoiced assignment is finished.
-// Its remaining non-billable entries are marked too, as Reports does, because invoiced is final.
-router.post('/assignments/:id/close', async (req, res) => {
-  try {
-    const [assignment] = await fullyInvoicedAssignments([req.params.id]);
-    if (!assignment) return res.status(400).json({ message: 'This assignment still has time to invoice or is already invoiced.' });
-    await TimeEntry.updateMany({ assignment: assignment._id, invoiced: { $ne: true } }, { $set: { invoiced: true } });
-    await Assignment.updateOne({ _id: assignment._id }, { $set: { status: 'invoiced' } });
-    res.json({ message: `${assignment.title} is now invoiced.` });
-  } catch (err) {
-    res.status(500).json({ message: 'Could not set this assignment to invoiced.', error: err.message });
+    if (issued) {
+      await Setting.updateOne({ key: issued.key, sequence: issued.sequence }, { $inc: { sequence: -1 } }).catch(() => {});
+    }
+    res.status(500).json({ message: 'Could not create this invoice.', error: err.message });
   }
 });
 

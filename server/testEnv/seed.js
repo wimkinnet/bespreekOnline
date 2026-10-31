@@ -37,8 +37,10 @@ async function seed() {
       postalCode: '9000',
       city: 'Gent',
       enterpriseNumber: 'BE 0000.000.000',
+      iban: 'BE00 0000 0000 0000',
     },
   });
+  await Setting.create({ key: `invoiceSequence:${new Date().getFullYear()}`, sequence: 18 });
 
   const homeAddress = { street: 'Voorbeeldlaan 10', postalCode: '2000', city: 'Antwerpen' };
   const admin = await User.create({

@@ -68,6 +68,17 @@ export default function AssignmentDetail() {
     }
   }
 
+  // Invoiced time logs stay invoiced; only the assignment becomes editable again
+  async function reopen() {
+    setError('');
+    try {
+      await api.put(`/assignments/${id}`, { status: 'completed' });
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not reopen this assignment.');
+    }
+  }
+
   function toggleConsultant(userId) {
     setForm((f) => ({
       ...f,
@@ -97,6 +108,11 @@ export default function AssignmentDetail() {
           {user.role === 'admin' && !editing && assignment.status !== 'invoiced' && (
             <button className="btn btn-sm" onClick={() => setEditing(true)}>
               Edit
+            </button>
+          )}
+          {user.role === 'admin' && assignment.status === 'invoiced' && (
+            <button className="btn btn-sm" onClick={reopen} title="Back to Completed, so it can be edited again">
+              Reopen
             </button>
           )}
         </div>
@@ -210,6 +226,7 @@ export default function AssignmentDetail() {
                 <option value="on_hold">On hold</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
+                <option value="invoiced">Invoiced</option>
               </select>
             </div>
             <div className="field">

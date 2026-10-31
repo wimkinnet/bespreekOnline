@@ -3,8 +3,6 @@ const router = express.Router();
 const ExcelJS = require('exceljs');
 const TimeEntry = require('../models/TimeEntry');
 const { protect, requireRole } = require('../middleware/auth');
-const onfact = require('../utils/onfact');
-const closeInvoicedAssignments = require('../utils/closeInvoicedAssignments');
 
 router.use(protect, requireRole('admin'));
 
@@ -143,18 +141,6 @@ router.get('/summary', async (req, res) => {
     const travelTotal = sumOf(byClient, 'travelAmount');
     const nonBillableTotal = sumOf(nonBillable.byClient, 'amount');
 
-    // What "Invoice period" would still mark as invoiced; non-billable logs are marked too but not charged
-    const uninvoiced = { ...match, invoiced: { $ne: true } };
-    const toInvoiceByClient = await totalsByClient({ ...uninvoiced, ...BILLABLE });
-    const toInvoice = {
-      entries: await TimeEntry.countDocuments(uninvoiced),
-      amount: sumOf(toInvoiceByClient, 'amount'),
-      travelAmount: sumOf(toInvoiceByClient, 'travelAmount'),
-      totalExclVat: sumOf(toInvoiceByClient, 'totalExclVat'),
-      vatAmount: sumOf(toInvoiceByClient, 'vatAmount'),
-      totalInclVat: sumOf(toInvoiceByClient, 'totalInclVat'),
-    };
-
     const vatTotal = sumOf(byClient, 'vatAmount');
     const totalInclVat = sumOf(byClient, 'totalInclVat');
 
@@ -164,68 +150,9 @@ router.get('/summary', async (req, res) => {
       vatRate: VAT_RATE,
       vatTotal,
       totalInclVat,
-      toInvoice,
-      onfactEnabled: onfact.isEnabled(),
     });
   } catch (err) {
     res.status(500).json({ message: 'Could not build report.', error: err.message });
-  }
-});
-
-// Creates one OnFact invoice per client for the billable entries, and marks a client's entries as invoiced
-// only once its invoice exists. A client whose invoice fails keeps its entries open, so it can be retried.
-async function invoiceThroughOnFact(match) {
-  const entries = await TimeEntry.find(match).sort({ date: 1 }).populate('client').populate('assignment', 'title');
-  const byClient = new Map();
-  for (const entry of entries) {
-    const key = String(entry.client?._id);
-    if (!byClient.has(key)) byClient.set(key, []);
-    byClient.get(key).push(entry);
-  }
-
-  let entriesInvoiced = 0;
-  const invoices = [];
-  const errors = [];
-  for (const group of byClient.values()) {
-    const { client } = group[0];
-    const billable = group.filter((e) => e.billable !== false);
-    try {
-      if (billable.length > 0) {
-        const id = await onfact.createInvoice(client, billable, VAT_RATE);
-        invoices.push({ clientName: client.name, id });
-        await TimeEntry.updateMany({ _id: { $in: billable.map((e) => e._id) } }, { $set: { onfactInvoiceId: id } });
-      }
-    } catch (err) {
-      errors.push({ clientName: client?.name || 'Unknown client', message: err.message });
-      continue;
-    }
-    const { modifiedCount } = await TimeEntry.updateMany(
-      { _id: { $in: group.map((e) => e._id) } },
-      { $set: { invoiced: true } }
-    );
-    entriesInvoiced += modifiedCount;
-  }
-  return { entriesInvoiced, invoices, errors };
-}
-
-// POST /api/reports/invoice { from, to }
-// Marks every time entry in the period as invoiced, through OnFact when that is configured. Completed
-// assignments that then have all their entries invoiced move to the final status 'invoiced'.
-router.post('/invoice', async (req, res) => {
-  try {
-    const match = { ...dateMatch(req.body), invoiced: { $ne: true } };
-    const assignmentIds = await TimeEntry.distinct('assignment', match);
-    let result;
-    if (onfact.isEnabled()) {
-      result = await invoiceThroughOnFact(match);
-    } else {
-      const { modifiedCount } = await TimeEntry.updateMany(match, { $set: { invoiced: true } });
-      result = { entriesInvoiced: modifiedCount };
-    }
-
-    res.json({ ...result, assignmentsInvoiced: await closeInvoicedAssignments(assignmentIds) });
-  } catch (err) {
-    res.status(500).json({ message: 'Could not invoice this period.', error: err.message });
   }
 });
 

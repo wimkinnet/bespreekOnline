@@ -8,6 +8,7 @@ const COMPANY_FIELDS = [
   ['postalCode', 'Postal code', ''],
   ['city', 'City', ''],
   ['enterpriseNumber', 'Enterprise number (KBO)', 'BE 0123.456.789'],
+  ['iban', 'Bank account for invoices (IBAN)', 'BE00 0000 0000 0000'],
 ];
 
 async function downloadPdf(claim) {

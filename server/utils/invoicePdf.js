@@ -1,20 +1,20 @@
 const path = require('path');
+const { PassThrough } = require('stream');
 const PDFDocument = require('pdfkit');
 
-// Renders the time to invoice for one client, in Dutch, as an A4 PDF to use with an invoice in OnFact.
-// It has no invoice number: only OnFact hands those out.
+// Renders the invoice of one client, in Dutch, as an A4 PDF. Without a number it is a concept.
 
 const INK = '#14302f';
 const SOFT = '#4a5e5d';
 const LINE = '#d9e3e3';
 const ACCENT = '#00807d';
+const PAYMENT_TERM_DAYS = 30;
 const asset = (file) => path.join(__dirname, '..', 'assets', file);
 // Who the PDF is presented as; the legal details are always those of the company itself
 const BRANDS = {
   bespreek: { logo: asset('bespreek-logo.png'), size: 56 },
   catalista: { tradeName: 'Catalista', logo: asset('catalista-logo.png'), size: 72 },
 };
-const TITLE = 'Overzicht prestaties';
 
 const eur = (n) => new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(n);
 const num = (n) => new Intl.NumberFormat('nl-BE', { maximumFractionDigits: 2 }).format(n);
@@ -45,8 +45,9 @@ function addressLines(address) {
   ].filter(Boolean);
 }
 
-module.exports = function renderInvoicePdf(invoice, stream) {
-  const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true, info: { Title: TITLE } });
+function renderInvoicePdf(invoice, stream) {
+  const title = invoice.number ? `Factuur ${invoice.number}` : 'Factuur (concept)';
+  const doc = new PDFDocument({ size: 'A4', margin: 50, bufferPages: true, info: { Title: title } });
   doc.pipe(stream);
   const left = doc.page.margins.left;
   const width = doc.page.width - left - doc.page.margins.right;
@@ -54,8 +55,11 @@ module.exports = function renderInvoicePdf(invoice, stream) {
 
   const brand = BRANDS[invoice.brand] || BRANDS.bespreek;
   doc.image(brand.logo, left + width - brand.size, 40, { fit: [brand.size, brand.size] });
-  doc.fillColor(INK).font('Helvetica-Bold').fontSize(20).text(TITLE, left, 50);
-  doc.font('Helvetica').fontSize(10.5).fillColor(SOFT).text(`Opgesteld op ${day(new Date())}`);
+  doc.fillColor(INK).font('Helvetica-Bold').fontSize(20).text(title, left, 50);
+  doc.font('Helvetica').fontSize(10.5).fillColor(SOFT).text(`Factuurdatum ${day(invoice.date)}`);
+  const dueDate = new Date(new Date(invoice.date).getTime() + PAYMENT_TERM_DAYS * 24 * 60 * 60 * 1000);
+  doc.text(`Vervaldatum ${day(dueDate)}`);
+  if (!invoice.number) doc.text('Nog geen factuur: het nummer volgt bij het aanmaken.');
 
   // Parties
   let y = 120;
@@ -155,7 +159,7 @@ module.exports = function renderInvoicePdf(invoice, stream) {
   ];
   const totalsW = 280;
   const totalsX = left + width - totalsW;
-  if (y + rows.length * 18 + 80 > bottom()) {
+  if (y + rows.length * 18 + 130 > bottom()) {
     doc.addPage();
     y = doc.page.margins.top;
   }
@@ -173,14 +177,21 @@ module.exports = function renderInvoicePdf(invoice, stream) {
     .text(eur(invoice.totalInclVat), totalsX + 10, y + 10, { width: totalsW - 20, align: 'right' });
   y += 46;
 
-  const notes = [
-    ...(invoice.vatNote ? [invoice.vatNote] : []),
-    'Het factuurnummer wordt toegekend in OnFact.',
+  // How to pay
+  const payment = [
+    `Te betalen binnen ${PAYMENT_TERM_DAYS} dagen, uiterlijk op ${day(dueDate)}`,
+    `Op rekening ${company.iban} op naam van ${company.name}`,
+    ...(invoice.number ? [`Met mededeling: Factuur ${invoice.number}`] : []),
   ];
-  doc.font('Helvetica').fontSize(8.5).fillColor(SOFT);
-  for (const note of notes) {
-    doc.text(note, left, y, { width });
-    y = doc.y + 4;
+  doc.font('Helvetica-Bold').fontSize(9.5).fillColor(INK);
+  for (const line of payment) {
+    doc.text(line, left, y, { width });
+    y = doc.y + 2;
+  }
+  y += 8;
+
+  if (invoice.vatNote) {
+    doc.font('Helvetica').fontSize(8.5).fillColor(SOFT).text(invoice.vatNote, left, y, { width });
   }
 
   // Page numbers
@@ -196,4 +207,17 @@ module.exports = function renderInvoicePdf(invoice, stream) {
     );
   }
   doc.end();
-};
+}
+
+function renderInvoiceBuffer(invoice) {
+  return new Promise((resolve, reject) => {
+    const stream = new PassThrough();
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+    renderInvoicePdf(invoice, stream);
+  });
+}
+
+module.exports = { renderInvoicePdf, renderInvoiceBuffer };

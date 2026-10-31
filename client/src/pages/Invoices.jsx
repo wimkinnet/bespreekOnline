@@ -8,7 +8,7 @@ export default function Invoices() {
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(null); // id of the client whose PDF is being made
   const [brands, setBrands] = useState({}); // chosen brand per client id; bespreek unless changed
-  const [marking, setMarking] = useState(null); // id of the client being marked as sent
+  const [issuing, setIssuing] = useState(null); // id of the client whose invoice is being created
 
   function load() {
     return api
@@ -22,46 +22,43 @@ export default function Invoices() {
     load();
   }, []);
 
-  // Stores the PDF with the client's bills and marks its time logs as invoiced
-  async function markSent(invoice) {
+  // Downloads a file the server answers with, under the given name
+  async function saveFile(url, fileName, params) {
+    const res = await api.get(url, { params, responseType: 'blob' });
+    const objectUrl = URL.createObjectURL(res.data);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  // Gives the invoice its number, stores the PDF with the client's bills and marks its time logs as invoiced
+  async function createInvoice(invoice) {
     const { client, entries, totalInclVat } = invoice;
     const brand = brands[client._id] || 'bespreek';
     const ok = window.confirm(
-      `Mark the invoice to ${client.name} as sent?\n\n` +
+      `Create the invoice to ${client.name}?\n\n` +
         `${entries} time log${entries === 1 ? '' : 's'}, ${formatEUR(totalInclVat)} incl. VAT\n` +
         `PDF as: ${brand === 'catalista' ? 'Catalista' : 'bespreek'}\n\n` +
-        'The PDF is stored under Documents & bills of this client and these logs become invoiced, which the app cannot undo.\n\n' +
-        'The app does not email anything: send the invoice from OnFact.'
+        'It gets the next invoice number and is stored under Documents & bills of this client. These logs become invoiced. The app cannot undo this.\n\n' +
+        'The app does not send anything: you mail the PDF yourself.'
     );
     if (!ok) return;
-    setMarking(client._id);
+    setIssuing(client._id);
     setError('');
     try {
-      const { data } = await api.post(`/invoices/${client._id}/sent`, { brand, entries });
+      const { data } = await api.post(`/invoices/${client._id}/create`, { brand, entries });
+      await saveFile(`/documents/${data.document._id}/download`, data.document.originalName);
       alert(
-        `${data.entriesInvoiced} time log${data.entriesInvoiced === 1 ? '' : 's'} marked as invoiced.\n` +
-          `Stored as ${data.document}.`
+        `Invoice ${data.invoiceNumber} created and downloaded.\n` +
+          `${data.entriesInvoiced} time log${data.entriesInvoiced === 1 ? '' : 's'} marked as invoiced.`
       );
-      await askToCloseAssignments(data.fullyInvoicedAssignments);
     } catch (err) {
-      setError(`${client.name}: ${err.response?.data?.message || 'Could not store this invoice.'}`);
+      setError(`${client.name}: ${err.response?.data?.message || 'Could not create this invoice.'}`);
     } finally {
-      setMarking(null);
+      setIssuing(null);
       await load();
-    }
-  }
-
-  // Asks per assignment, because more work may still follow on one whose logs are all invoiced for now
-  async function askToCloseAssignments(assignments) {
-    for (const { _id, title, nonBillableEntries } of assignments) {
-      const ok = window.confirm(
-        `All billable time logs of "${title}" are now invoiced.\n\n` +
-          'Set this assignment to Invoiced? This is final: it can no longer be changed and no more time can be logged on it.' +
-          (nonBillableEntries
-            ? `\n\n${nonBillableEntries} non-billable log${nonBillableEntries === 1 ? '' : 's'} will be marked as invoiced too.`
-            : '')
-      );
-      if (ok) await api.post(`/invoices/assignments/${_id}/close`);
     }
   }
 
@@ -69,16 +66,9 @@ export default function Invoices() {
     setCreating(client._id);
     setError('');
     try {
-      const res = await api.get(`/invoices/${client._id}/pdf`, {
-        params: { brand: brands[client._id] || 'bespreek' },
-        responseType: 'blob',
+      await saveFile(`/invoices/${client._id}/pdf`, `factuur-concept_${client.name.replace(/[^\w-]+/g, '_')}.pdf`, {
+        brand: brands[client._id] || 'bespreek',
       });
-      const url = URL.createObjectURL(res.data);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `overzicht-prestaties_${client.name.replace(/[^\w-]+/g, '_')}.pdf`;
-      link.click();
-      URL.revokeObjectURL(url);
     } catch (err) {
       // The answer was requested as a file, so an error message arrives as one too
       const text = await err.response?.data?.text?.();
@@ -99,7 +89,7 @@ export default function Invoices() {
       <div className="page-header">
         <div>
           <h1>Invoices</h1>
-          <p>Billable time not yet invoiced. Creating a PDF does not mark anything as invoiced.</p>
+          <p>Billable time not yet invoiced. Concept shows the PDF without changing anything; Create invoice gives it its number.</p>
         </div>
       </div>
 
@@ -151,10 +141,10 @@ export default function Invoices() {
                         <option value="catalista">Catalista</option>
                       </select>
                       <button className="btn btn-sm" onClick={() => downloadPdf(i.client)} disabled={creating === i.client._id}>
-                        {creating === i.client._id ? 'Creating…' : 'PDF'}
+                        {creating === i.client._id ? 'Creating…' : 'Concept'}
                       </button>
-                      <button className="btn btn-sm btn-primary" onClick={() => markSent(i)} disabled={marking === i.client._id}>
-                        {marking === i.client._id ? 'Saving…' : 'Sent to client'}
+                      <button className="btn btn-sm btn-primary" onClick={() => createInvoice(i)} disabled={issuing === i.client._id}>
+                        {issuing === i.client._id ? 'Creating…' : 'Create invoice'}
                       </button>
                     </div>
                   </td>

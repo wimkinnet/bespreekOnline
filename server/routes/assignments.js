@@ -74,10 +74,22 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     const existing = await Assignment.findById(req.params.id).select('status');
     if (!existing) return res.status(404).json({ message: 'Assignment not found.' });
     if (existing.status === 'invoiced') {
-      return res.status(400).json({ message: 'This assignment is invoiced and can no longer be changed.' });
+      const reopening = Object.keys(req.body).join() === 'status' && req.body.status !== 'invoiced';
+      if (!reopening) {
+        return res.status(400).json({ message: 'This assignment is invoiced. Reopen it first to change it.' });
+      }
     }
     if (req.body.status === 'invoiced') {
-      return res.status(400).json({ message: 'An assignment becomes invoiced by invoicing its time logs from Reports.' });
+      const open = await TimeEntry.countDocuments({
+        assignment: req.params.id,
+        invoiced: { $ne: true },
+        billable: { $ne: false },
+      });
+      if (open > 0) {
+        return res.status(400).json({
+          message: `This assignment still has ${open} billable time log${open === 1 ? '' : 's'} to invoice.`,
+        });
+      }
     }
     const assignment = await Assignment.findByIdAndUpdate(req.params.id, req.body, {
       new: true,

@@ -26,6 +26,7 @@ const timeEntrySchema = new mongoose.Schema(
     invoiced: { type: Boolean, default: false },
     onfactInvoiceId: { type: String }, // the OnFact invoice this entry is on, when invoiced through OnFact
     invoiceDocument: { type: mongoose.Schema.Types.ObjectId, ref: 'Document' }, // the stored PDF this entry is on
+    invoiceNumber: { type: String }, // the invoice this entry is on, when created on the Invoices tab
     // Set once the travel of this entry is on a consultant's expense claim; the entry is then locked
     travelClaim: { type: mongoose.Schema.Types.ObjectId, ref: 'TravelClaim', default: null },
   },
