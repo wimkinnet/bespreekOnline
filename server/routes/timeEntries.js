@@ -186,7 +186,11 @@ router.post('/', async (req, res) => {
     }
 
     const { amount, rateApplied, billingType } = computeAmount(assignment, { hours, days, feeAmount });
+    // An admin can log time for another consultant; anyone else only for themselves
     const consultantId = req.user.role === 'admin' && req.body.consultant ? req.body.consultant : req.user._id;
+    if (String(consultantId) !== String(req.user._id) && !(await User.exists({ _id: consultantId, active: true }))) {
+      return res.status(400).json({ message: 'The selected consultant does not exist or is deactivated.' });
+    }
     const travel = await computeTravel(
       { includeTravel, travelType, travelKm, travelRate, travelAmount, travelNote },
       consultantId,

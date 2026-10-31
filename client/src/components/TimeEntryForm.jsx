@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 import { formatEUR, formatDate, billingTypeLabel, rateUnitLabel } from '../utils/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -20,8 +21,9 @@ function periodLabel(assignment) {
 }
 
 // includeTravel starts unanswered (null) so the consultant has to choose yes or no for every entry
-const emptyEntry = (assignment = '') => ({
+const emptyEntry = (assignment = '', consultant = '') => ({
   assignment,
+  consultant,
   date: today(),
   amountValue: '',
   feeAmount: '',
@@ -66,7 +68,11 @@ export function entryLockReason(entry, assignmentStatus = entry.assignment?.stat
 // Entry form, used on the Time registration page (pick any assignment), on an assignment's
 // detail page (`assignment` given: the form is locked to that assignment) and to edit an
 // existing entry (`entry` given: the form is locked to its assignment, billing type and rate).
+// An admin logging a new entry can pick the consultant it is for.
 export default function TimeEntryForm({ assignments = [], assignment, entry, onSaved, onCancel }) {
+  const { user } = useAuth();
+  const canPickConsultant = user.role === 'admin' && !entry;
+  const [consultants, setConsultants] = useState([]);
   // The entry's own billing type and rate apply, even if the assignment's have changed since
   const lockedAssignment = entry
     ? { ...entry.assignment, client: entry.client, billingType: entry.billingType, rate: entry.rateApplied }
@@ -76,7 +82,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedCount, setSavedCount] = useState(0); // refreshes the remaining fixed fee after each save
-  const [form, setForm] = useState(entry ? entryToForm(entry) : emptyEntry(lockedAssignment?._id));
+  const [form, setForm] = useState(entry ? entryToForm(entry) : emptyEntry(lockedAssignment?._id, user.id));
   const [travel, setTravel] = useState(null); // distance lookup result for the selected assignment
   const [travelError, setTravelError] = useState('');
   const [travelLoading, setTravelLoading] = useState(false);
@@ -85,6 +91,11 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
   const selectedAssignment = lockedAssignment || assignments.find((a) => a._id === form.assignment);
   const currentAssignments = assignments.filter((a) => inPeriod(a, form.date));
   const otherAssignments = assignments.filter((a) => !inPeriod(a, form.date));
+
+  useEffect(() => {
+    if (!canPickConsultant) return;
+    api.get('/users').then(({ data }) => setConsultants(data.filter((u) => u.active)));
+  }, [canPickConsultant]);
 
   // For a fixed fee, suggest billing whatever part of the fee has not been registered yet
   const fixedAssignmentId = selectedAssignment?.billingType === 'fixed' ? selectedAssignment._id : null;
@@ -107,7 +118,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
   }, [fixedAssignmentId, savedCount]);
 
   // Look up the distance from the consultant's home to the client once travel costs are requested
-  // (when editing, from the entry's consultant, and never over the km already saved on the entry)
+  // (from the entry's or the selected consultant, and never over the km already saved on an entry)
   const clientId = selectedAssignment?.client?._id;
   useEffect(() => {
     if (!form.includeTravel || form.travelType !== 'km' || !clientId || legacyTravel) return;
@@ -117,7 +128,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
     setTravelError('');
     setTravelLoading(true);
     api
-      .get('/distance', { params: { client: clientId, consultant: entry?.consultant?._id } })
+      .get('/distance', { params: { client: clientId, consultant: entry?.consultant?._id || form.consultant || undefined } })
       .then(({ data }) => {
         if (cancelled) return;
         setTravel(data);
@@ -133,7 +144,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.includeTravel, form.travelType, clientId]);
+  }, [form.includeTravel, form.travelType, form.consultant, clientId]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -147,6 +158,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
         description: form.description,
         billable: form.billable,
       };
+      if (canPickConsultant) payload.consultant = form.consultant;
       // When editing, unchanged travel is left alone so its amount is not recalculated
       const saved = entry && entryToForm(entry);
       const travelChanged =
@@ -180,7 +192,7 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
         ? await api.put(`/time-entries/${entry._id}`, payload)
         : await api.post('/time-entries', payload);
       if (!entry) {
-        setForm(emptyEntry(selectedAssignment._id));
+        setForm(emptyEntry(selectedAssignment._id, form.consultant));
         setSavedCount((n) => n + 1);
       }
 
@@ -210,6 +222,28 @@ export default function TimeEntryForm({ assignments = [], assignment, entry, onS
         </p>
       ) : (
         <form onSubmit={handleSubmit}>
+          {canPickConsultant && (
+            <div className="field">
+              <label>Consultant</label>
+              <select
+                required
+                value={form.consultant}
+                onChange={(e) => setForm({ ...form, consultant: e.target.value })}
+              >
+                {consultants.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+              {selectedAssignment?.consultants && !selectedAssignment.consultants.some((c) => c._id === form.consultant) && (
+                <div className="muted" style={{ fontSize: 12 }}>
+                  This consultant is not staffed on this assignment.
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="field-row">
             <div className="field">
               <label>Date</label>
