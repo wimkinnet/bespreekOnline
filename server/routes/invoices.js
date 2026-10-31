@@ -6,11 +6,11 @@ const { pipeline } = require('stream/promises');
 const { PassThrough } = require('stream');
 const TimeEntry = require('../models/TimeEntry');
 const Document = require('../models/Document');
+const Assignment = require('../models/Assignment');
 const Setting = require('../models/Setting');
 const { protect, requireRole } = require('../middleware/auth');
 const onfact = require('../utils/onfact');
 const renderInvoicePdf = require('../utils/invoicePdf');
-const closeInvoicedAssignments = require('../utils/closeInvoicedAssignments');
 const { UPLOAD_ROOT } = require('../middleware/upload');
 
 router.use(protect, requireRole('admin'));
@@ -93,6 +93,20 @@ async function pdfDetails(invoice, brand) {
   };
 }
 
+// The given assignments that have nothing left to bill. Non-billable entries are never on an invoice, so they do
+// not keep an assignment open.
+async function fullyInvoicedAssignments(assignmentIds) {
+  const assignments = await Assignment.find({ _id: { $in: assignmentIds }, status: { $ne: 'invoiced' } }).select('title');
+  const result = [];
+  for (const assignment of assignments) {
+    const open = { assignment: assignment._id, invoiced: { $ne: true } };
+    if (await TimeEntry.exists({ ...open, billable: { $ne: false } })) continue;
+    const nonBillableEntries = await TimeEntry.countDocuments(open);
+    result.push({ _id: assignment._id, title: assignment.title, nonBillableEntries });
+  }
+  return result;
+}
+
 // GET /api/invoices/open - what can still be invoiced, per client
 router.get('/open', async (req, res) => {
   try {
@@ -172,7 +186,7 @@ router.post('/:clientId/sent', async (req, res) => {
     res.json({
       entriesInvoiced: modifiedCount,
       document: storedDocument.originalName,
-      assignmentsInvoiced: await closeInvoicedAssignments(assignmentIds),
+      fullyInvoicedAssignments: await fullyInvoicedAssignments(assignmentIds),
     });
   } catch (err) {
     if (err instanceof onfact.OnFactError) return res.status(400).json({ message: err.message });
@@ -180,6 +194,20 @@ router.post('/:clientId/sent', async (req, res) => {
     if (storedPath && fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
     if (storedDocument) await Document.deleteOne({ _id: storedDocument._id }).catch(() => {});
     res.status(500).json({ message: 'Could not store this invoice.', error: err.message });
+  }
+});
+
+// POST /api/invoices/assignments/:id/close - the user confirmed this fully invoiced assignment is finished.
+// Its remaining non-billable entries are marked too, as Reports does, because invoiced is final.
+router.post('/assignments/:id/close', async (req, res) => {
+  try {
+    const [assignment] = await fullyInvoicedAssignments([req.params.id]);
+    if (!assignment) return res.status(400).json({ message: 'This assignment still has time to invoice or is already invoiced.' });
+    await TimeEntry.updateMany({ assignment: assignment._id, invoiced: { $ne: true } }, { $set: { invoiced: true } });
+    await Assignment.updateOne({ _id: assignment._id }, { $set: { status: 'invoiced' } });
+    res.json({ message: `${assignment.title} is now invoiced.` });
+  } catch (err) {
+    res.status(500).json({ message: 'Could not set this assignment to invoiced.', error: err.message });
   }
 });
 

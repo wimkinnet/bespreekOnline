@@ -6,7 +6,8 @@ const assignmentSchema = new mongoose.Schema(
     client: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', required: true },
     title: { type: String, required: true, trim: true },
     description: { type: String },
-    // 'invoiced' is final: set automatically once a completed assignment has all its time entries invoiced
+    // 'invoiced' is final: set once all time entries are invoiced, automatically from Reports for a completed
+    // assignment, or after confirming it on the Invoices tab
     status: {
       type: String,
       enum: ['prospect', 'active', 'on_hold', 'completed', 'cancelled', 'invoiced'],

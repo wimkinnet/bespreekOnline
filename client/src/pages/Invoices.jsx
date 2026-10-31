@@ -38,17 +38,30 @@ export default function Invoices() {
     setError('');
     try {
       const { data } = await api.post(`/invoices/${client._id}/sent`, { brand, entries });
-      const closed = data.assignmentsInvoiced;
       alert(
         `${data.entriesInvoiced} time log${data.entriesInvoiced === 1 ? '' : 's'} marked as invoiced.\n` +
-          `Stored as ${data.document}.` +
-          (closed.length ? `\n\nAssignments now invoiced:\n- ${closed.join('\n- ')}` : '')
+          `Stored as ${data.document}.`
       );
+      await askToCloseAssignments(data.fullyInvoicedAssignments);
     } catch (err) {
       setError(`${client.name}: ${err.response?.data?.message || 'Could not store this invoice.'}`);
     } finally {
       setMarking(null);
       await load();
+    }
+  }
+
+  // Asks per assignment, because more work may still follow on one whose logs are all invoiced for now
+  async function askToCloseAssignments(assignments) {
+    for (const { _id, title, nonBillableEntries } of assignments) {
+      const ok = window.confirm(
+        `All billable time logs of "${title}" are now invoiced.\n\n` +
+          'Set this assignment to Invoiced? This is final: it can no longer be changed and no more time can be logged on it.' +
+          (nonBillableEntries
+            ? `\n\n${nonBillableEntries} non-billable log${nonBillableEntries === 1 ? '' : 's'} will be marked as invoiced too.`
+            : '')
+      );
+      if (ok) await api.post(`/invoices/assignments/${_id}/close`);
     }
   }
 
