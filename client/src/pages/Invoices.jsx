@@ -8,14 +8,49 @@ export default function Invoices() {
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(null); // id of the client whose PDF is being made
   const [brands, setBrands] = useState({}); // chosen brand per client id; bespreek unless changed
+  const [marking, setMarking] = useState(null); // id of the client being marked as sent
 
-  useEffect(() => {
-    api
+  function load() {
+    return api
       .get('/invoices/open')
       .then(({ data }) => setInvoices(data))
       .catch((err) => setError(err.response?.data?.message || 'Could not load the time to invoice.'))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    load();
   }, []);
+
+  // Stores the PDF with the client's bills and marks its time logs as invoiced
+  async function markSent(invoice) {
+    const { client, entries, totalInclVat } = invoice;
+    const brand = brands[client._id] || 'bespreek';
+    const ok = window.confirm(
+      `Mark the invoice to ${client.name} as sent?\n\n` +
+        `${entries} time log${entries === 1 ? '' : 's'}, ${formatEUR(totalInclVat)} incl. VAT\n` +
+        `PDF as: ${brand === 'catalista' ? 'Catalista' : 'bespreek'}\n\n` +
+        'The PDF is stored under Documents & bills of this client and these logs become invoiced, which the app cannot undo.\n\n' +
+        'The app does not email anything: send the invoice from OnFact.'
+    );
+    if (!ok) return;
+    setMarking(client._id);
+    setError('');
+    try {
+      const { data } = await api.post(`/invoices/${client._id}/sent`, { brand, entries });
+      const closed = data.assignmentsInvoiced;
+      alert(
+        `${data.entriesInvoiced} time log${data.entriesInvoiced === 1 ? '' : 's'} marked as invoiced.\n` +
+          `Stored as ${data.document}.` +
+          (closed.length ? `\n\nAssignments now invoiced:\n- ${closed.join('\n- ')}` : '')
+      );
+    } catch (err) {
+      setError(`${client.name}: ${err.response?.data?.message || 'Could not store this invoice.'}`);
+    } finally {
+      setMarking(null);
+      await load();
+    }
+  }
 
   async function downloadPdf(client) {
     setCreating(client._id);
@@ -58,7 +93,7 @@ export default function Invoices() {
       {error && <div className="error-banner">{error}</div>}
 
       <h2 style={{ marginBottom: 10 }}>Per client</h2>
-      <div className="table-wrap">
+      <div className="table-wrap" style={{ overflowX: 'auto' }}>
         {loading ? (
           <div className="empty-state">Loading…</div>
         ) : invoices.length === 0 ? (
@@ -93,10 +128,9 @@ export default function Invoices() {
                   <td>{i.client.vatExempt ? <span className="muted">No VAT</span> : formatEUR(i.vatAmount)}</td>
                   <td>{formatEUR(i.totalInclVat)}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <div className="row-actions">
+                    <div className="invoice-actions">
                       <select
                         aria-label={`Brand on the PDF for ${i.client.name}`}
-                        style={{ width: 'auto' }}
                         value={brands[i.client._id] || 'bespreek'}
                         onChange={(e) => setBrands({ ...brands, [i.client._id]: e.target.value })}
                       >
@@ -105,6 +139,9 @@ export default function Invoices() {
                       </select>
                       <button className="btn btn-sm" onClick={() => downloadPdf(i.client)} disabled={creating === i.client._id}>
                         {creating === i.client._id ? 'Creating…' : 'PDF'}
+                      </button>
+                      <button className="btn btn-sm btn-primary" onClick={() => markSent(i)} disabled={marking === i.client._id}>
+                        {marking === i.client._id ? 'Saving…' : 'Sent to client'}
                       </button>
                     </div>
                   </td>

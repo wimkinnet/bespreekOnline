@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 const ExcelJS = require('exceljs');
 const TimeEntry = require('../models/TimeEntry');
-const Assignment = require('../models/Assignment');
 const { protect, requireRole } = require('../middleware/auth');
 const onfact = require('../utils/onfact');
+const closeInvoicedAssignments = require('../utils/closeInvoicedAssignments');
 
 router.use(protect, requireRole('admin'));
 
@@ -223,15 +223,7 @@ router.post('/invoice', async (req, res) => {
       result = { entriesInvoiced: modifiedCount };
     }
 
-    const completed = await Assignment.find({ _id: { $in: assignmentIds }, status: 'completed' }).select('_id title');
-    const closed = [];
-    for (const assignment of completed) {
-      const open = await TimeEntry.exists({ assignment: assignment._id, invoiced: { $ne: true } });
-      if (!open) closed.push(assignment);
-    }
-    await Assignment.updateMany({ _id: { $in: closed.map((a) => a._id) } }, { $set: { status: 'invoiced' } });
-
-    res.json({ ...result, assignmentsInvoiced: closed.map((a) => a.title) });
+    res.json({ ...result, assignmentsInvoiced: await closeInvoicedAssignments(assignmentIds) });
   } catch (err) {
     res.status(500).json({ message: 'Could not invoice this period.', error: err.message });
   }

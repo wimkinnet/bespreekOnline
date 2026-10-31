@@ -1,10 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+const { pipeline } = require('stream/promises');
+const { PassThrough } = require('stream');
 const TimeEntry = require('../models/TimeEntry');
+const Document = require('../models/Document');
 const Setting = require('../models/Setting');
 const { protect, requireRole } = require('../middleware/auth');
 const onfact = require('../utils/onfact');
 const renderInvoicePdf = require('../utils/invoicePdf');
+const closeInvoicedAssignments = require('../utils/closeInvoicedAssignments');
+const { UPLOAD_ROOT } = require('../middleware/upload');
 
 router.use(protect, requireRole('admin'));
 
@@ -67,6 +74,25 @@ async function openInvoices(filter = {}) {
     .sort((a, b) => a.client.name.localeCompare(b.client.name));
 }
 
+function safeFileName(client) {
+  return client.name.replace(/[^\w-]+/g, '_');
+}
+
+// Everything the PDF shows besides the invoice itself. Refuses a country that does not fit the client's VAT treatment.
+async function pdfDetails(invoice, brand) {
+  const { client } = invoice;
+  const country = onfact.invoiceCountry(client);
+  const setting = await Setting.findOne({ key: 'company' });
+  return {
+    ...invoice,
+    brand,
+    company: setting?.toObject().company || {},
+    address: onfact.billingAddress(client) || {},
+    contactName: client.billing?.contactName || client.contactName,
+    vatNote: client.vatExempt ? onfact.reverseChargeNote(country) : null,
+  };
+}
+
 // GET /api/invoices/open - what can still be invoiced, per client
 router.get('/open', async (req, res) => {
   try {
@@ -93,26 +119,67 @@ router.get('/:clientId/pdf', async (req, res) => {
   try {
     const [invoice] = await openInvoices({ client: req.params.clientId });
     if (!invoice) return res.status(404).json({ message: 'Nothing left to invoice for this client.' });
-    const { client } = invoice;
-    const country = onfact.invoiceCountry(client);
-    const setting = await Setting.findOne({ key: 'company' });
-    const safeName = client.name.replace(/[^\w-]+/g, '_');
+    const details = await pdfDetails(invoice, req.query.brand);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="overzicht-prestaties_${safeName}.pdf"`);
-    renderInvoicePdf(
-      {
-        ...invoice,
-        brand: req.query.brand,
-        company: setting?.toObject().company || {},
-        address: onfact.billingAddress(client) || {},
-        contactName: client.billing?.contactName || client.contactName,
-        vatNote: client.vatExempt ? onfact.reverseChargeNote(country) : null,
-      },
-      res
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="overzicht-prestaties_${safeFileName(invoice.client)}.pdf"`);
+    renderInvoicePdf(details, res);
   } catch (err) {
     if (err instanceof onfact.OnFactError) return res.status(400).json({ message: err.message });
     res.status(500).json({ message: 'Could not create the PDF.', error: err.message });
+  }
+});
+
+// POST /api/invoices/:clientId/sent { brand, entries } - the client received this invoice: stores the PDF with the
+// client's bills and marks exactly the entries on it as invoiced. `entries` is the count the user confirmed.
+// Sending itself happens outside the app.
+router.post('/:clientId/sent', async (req, res) => {
+  let storedPath;
+  let storedDocument;
+  try {
+    const [invoice] = await openInvoices({ client: req.params.clientId });
+    if (!invoice) return res.status(404).json({ message: 'Nothing left to invoice for this client.' });
+    if (Number(req.body.entries) !== invoice.entries) {
+      return res.status(409).json({ message: 'The time of this client has changed. Check the new numbers and try again.' });
+    }
+    const { client } = invoice;
+    const details = await pdfDetails(invoice, req.body.brand);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const storedFileName = `${Date.now()}-overzicht-prestaties.pdf`;
+    const folder = path.join(UPLOAD_ROOT, String(client._id));
+    fs.mkdirSync(folder, { recursive: true });
+    storedPath = path.join(folder, storedFileName);
+    const pdf = new PassThrough();
+    renderInvoicePdf(details, pdf);
+    await pipeline(pdf, fs.createWriteStream(storedPath));
+
+    storedDocument = await Document.create({
+      client: client._id,
+      category: 'bill',
+      originalName: `overzicht-prestaties_${safeFileName(client)}_${today}.pdf`,
+      storedFileName,
+      mimeType: 'application/pdf',
+      size: fs.statSync(storedPath).size,
+      uploadedBy: req.user._id,
+    });
+
+    const entries = invoice.assignments.flatMap((a) => a.entries);
+    const { modifiedCount } = await TimeEntry.updateMany(
+      { _id: { $in: entries.map((e) => e._id) }, invoiced: { $ne: true } },
+      { $set: { invoiced: true, invoiceDocument: storedDocument._id } }
+    );
+    const assignmentIds = [...new Set(entries.map((e) => e.assignment?._id).filter(Boolean))];
+    res.json({
+      entriesInvoiced: modifiedCount,
+      document: storedDocument.originalName,
+      assignmentsInvoiced: await closeInvoicedAssignments(assignmentIds),
+    });
+  } catch (err) {
+    if (err instanceof onfact.OnFactError) return res.status(400).json({ message: err.message });
+    // Nothing was marked, so nothing may stay behind that looks like a sent invoice
+    if (storedPath && fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+    if (storedDocument) await Document.deleteOne({ _id: storedDocument._id }).catch(() => {});
+    res.status(500).json({ message: 'Could not store this invoice.', error: err.message });
   }
 });
 

@@ -257,6 +257,20 @@ textarea {
   white-space: nowrap;
 }
 
+.invoice-actions {
+  display: inline-grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+}
+
+.invoice-actions .btn-primary {
+  grid-column: 1 / -1;
+}
+
+.invoice-actions select {
+  width: auto;
+}
+
 .row-actions .btn-danger {
   border-color: var(--border);
 }

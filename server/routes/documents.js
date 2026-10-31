@@ -8,6 +8,11 @@ const { upload, UPLOAD_ROOT } = require('../middleware/upload');
 
 router.use(protect);
 
+// Bills and invoices are for admins; a consultant only sees the ones they uploaded themselves
+function canSeeBill(doc, user) {
+  return user.role === 'admin' || (doc.uploadedBy && doc.uploadedBy.toString() === user._id.toString());
+}
+
 // GET /api/documents?client=&assignment=&category=
 router.get('/', async (req, res) => {
   try {
@@ -16,6 +21,9 @@ router.get('/', async (req, res) => {
     if (client) filter.client = client;
     if (assignment) filter.assignment = assignment;
     if (category) filter.category = category;
+    if (req.user.role !== 'admin') {
+      filter.$or = [{ category: { $ne: 'bill' } }, { uploadedBy: req.user._id }];
+    }
 
     const documents = await Document.find(filter)
       .populate('uploadedBy', 'name')
@@ -55,7 +63,9 @@ router.post('/', upload.single('file'), async (req, res) => {
 router.get('/:id/download', async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
-    if (!doc) return res.status(404).json({ message: 'Document not found.' });
+    if (!doc || (doc.category === 'bill' && !canSeeBill(doc, req.user))) {
+      return res.status(404).json({ message: 'Document not found.' });
+    }
 
     const filePath = path.join(UPLOAD_ROOT, doc.client.toString(), doc.storedFileName);
     if (!fs.existsSync(filePath)) {
