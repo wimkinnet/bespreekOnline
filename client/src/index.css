@@ -312,6 +312,42 @@ textarea {
   color: var(--ink);
 }
 
+.stat-non-billable {
+  background: transparent;
+  border-style: dashed;
+}
+
+.stat-non-billable .value {
+  color: var(--ink-soft);
+}
+
+/* ---------- Reports ---------- */
+
+.report-group-by {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-bottom: 18px;
+  font-size: 13.5px;
+}
+
+.report-group-by > span {
+  font-weight: 600;
+}
+
+.report-group-by label {
+  margin: 0;
+}
+
+.report-non-billable {
+  border-style: dashed;
+}
+
+.report-non-billable td {
+  color: var(--ink-soft);
+}
+
 /* ---------- Tables ---------- */
 
 table {

@@ -9,6 +9,8 @@ const onfact = require('../utils/onfact');
 router.use(protect, requireRole('admin'));
 
 const VAT_RATE = 0.21;
+const BILLABLE = { billable: { $ne: false } };
+const NON_BILLABLE = { billable: false };
 
 function roundCents(n) {
   return Math.round(n * 100) / 100;
@@ -60,69 +62,90 @@ async function totalsByClient(match) {
   });
 }
 
+function totalsByConsultant(match) {
+  return TimeEntry.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: '$consultant',
+        hours: { $sum: { $ifNull: ['$hours', 0] } },
+        days: { $sum: { $ifNull: ['$days', 0] } },
+        amount: { $sum: '$amount' },
+        travelAmount: { $sum: { $ifNull: ['$travelAmount', 0] } },
+        entries: { $sum: 1 },
+      },
+    },
+    { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+    { $unwind: '$user' },
+    { $project: { consultantName: '$user.name', hours: 1, days: 1, amount: 1, travelAmount: 1, entries: 1 } },
+    { $sort: { amount: -1 } },
+  ]);
+}
+
+function totalsByAssignment(match) {
+  return TimeEntry.aggregate([
+    { $match: match },
+    {
+      $group: {
+        _id: '$assignment',
+        hours: { $sum: { $ifNull: ['$hours', 0] } },
+        days: { $sum: { $ifNull: ['$days', 0] } },
+        amount: { $sum: '$amount' },
+        travelAmount: { $sum: { $ifNull: ['$travelAmount', 0] } },
+        entries: { $sum: 1 },
+        invoicedAmount: { $sum: { $cond: ['$invoiced', '$amount', 0] } },
+      },
+    },
+    { $lookup: { from: 'assignments', localField: '_id', foreignField: '_id', as: 'assignment' } },
+    { $unwind: '$assignment' },
+    { $lookup: { from: 'clients', localField: 'assignment.client', foreignField: '_id', as: 'client' } },
+    { $unwind: { path: '$client', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        assignmentTitle: '$assignment.title',
+        clientName: '$client.name',
+        billingType: '$assignment.billingType',
+        hours: 1,
+        days: 1,
+        amount: 1,
+        travelAmount: 1,
+        entries: 1,
+        invoicedAmount: 1,
+      },
+    },
+    { $sort: { amount: -1 } },
+  ]);
+}
+
+async function groupedTotals(match) {
+  const [byClient, byConsultant, byAssignment] = await Promise.all([
+    totalsByClient(match),
+    totalsByConsultant(match),
+    totalsByAssignment(match),
+  ]);
+  return { byClient, byConsultant, byAssignment };
+}
+
 // GET /api/reports/summary?from=&to=
-// Returns totals grouped by client, by consultant, and grand totals, for a date range.
-// Income only counts what was registered as time entries (including fixed fees).
+// Returns billable and non-billable totals per client, consultant and assignment for a date range.
+// Income and VAT only count billable entries; non-billable ones are never charged.
 router.get('/summary', async (req, res) => {
   try {
     const match = dateMatch(req.query);
-    const byClient = await totalsByClient(match);
-
-    const byConsultant = await TimeEntry.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: '$consultant',
-          hours: { $sum: { $ifNull: ['$hours', 0] } },
-          days: { $sum: { $ifNull: ['$days', 0] } },
-          amount: { $sum: '$amount' },
-          travelAmount: { $sum: { $ifNull: ['$travelAmount', 0] } },
-          entries: { $sum: 1 },
-        },
-      },
-      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
-      { $unwind: '$user' },
-      { $project: { consultantName: '$user.name', hours: 1, days: 1, amount: 1, travelAmount: 1, entries: 1 } },
-      { $sort: { amount: -1 } },
+    const [billable, nonBillable] = await Promise.all([
+      groupedTotals({ ...match, ...BILLABLE }),
+      groupedTotals({ ...match, ...NON_BILLABLE }),
     ]);
+    const { byClient } = billable;
+    const sumOf = (rows, key) => roundCents(rows.reduce((sum, c) => sum + c[key], 0));
 
-    const byAssignment = await TimeEntry.aggregate([
-      { $match: match },
-      {
-        $group: {
-          _id: '$assignment',
-          hours: { $sum: { $ifNull: ['$hours', 0] } },
-          days: { $sum: { $ifNull: ['$days', 0] } },
-          amount: { $sum: '$amount' },
-          travelAmount: { $sum: { $ifNull: ['$travelAmount', 0] } },
-          entries: { $sum: 1 },
-          invoicedAmount: { $sum: { $cond: ['$invoiced', '$amount', 0] } },
-        },
-      },
-      { $lookup: { from: 'assignments', localField: '_id', foreignField: '_id', as: 'assignment' } },
-      { $unwind: '$assignment' },
-      {
-        $project: {
-          assignmentTitle: '$assignment.title',
-          billingType: '$assignment.billingType',
-          hours: 1,
-          days: 1,
-          amount: 1,
-          travelAmount: 1,
-          entries: 1,
-          invoicedAmount: 1,
-        },
-      },
-      { $sort: { amount: -1 } },
-    ]);
-
-    const grandTotal = byClient.reduce((sum, c) => sum + c.amount, 0);
-    const travelTotal = byClient.reduce((sum, c) => sum + c.travelAmount, 0);
+    const grandTotal = sumOf(byClient, 'amount');
+    const travelTotal = sumOf(byClient, 'travelAmount');
+    const nonBillableTotal = sumOf(nonBillable.byClient, 'amount');
 
     // What "Invoice period" would still mark as invoiced; non-billable logs are marked too but not charged
     const uninvoiced = { ...match, invoiced: { $ne: true } };
-    const toInvoiceByClient = await totalsByClient({ ...uninvoiced, billable: { $ne: false } });
-    const sumOf = (rows, key) => roundCents(rows.reduce((sum, c) => sum + c[key], 0));
+    const toInvoiceByClient = await totalsByClient({ ...uninvoiced, ...BILLABLE });
     const toInvoice = {
       entries: await TimeEntry.countDocuments(uninvoiced),
       amount: sumOf(toInvoiceByClient, 'amount'),
@@ -135,8 +158,9 @@ router.get('/summary', async (req, res) => {
     const vatTotal = sumOf(byClient, 'vatAmount');
     const totalInclVat = sumOf(byClient, 'totalInclVat');
 
-    res.json({ byClient, byConsultant, byAssignment, grandTotal,
+    res.json({ billable, nonBillable, grandTotal,
       travelTotal,
+      nonBillableTotal,
       vatRate: VAT_RATE,
       vatTotal,
       totalInclVat,
@@ -214,17 +238,20 @@ router.post('/invoice', async (req, res) => {
 });
 
 // GET /api/reports/by-client.xlsx?from=&to=
-// Excel export of the totals per client, including VAT.
+// Excel export of the billable totals per client, including VAT, with non-billable work listed separately.
 router.get('/by-client.xlsx', async (req, res) => {
   try {
     const { from, to } = req.query;
-    const rows = await totalsByClient(dateMatch(req.query));
+    const match = dateMatch(req.query);
+    const rows = await totalsByClient({ ...match, ...BILLABLE });
+    const nonBillableRows = await totalsByClient({ ...match, ...NON_BILLABLE });
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('By client');
     const period = `${from || '…'} – ${to || '…'}`;
     sheet.addRow([`Report by client, ${period}`]).font = { bold: true, size: 13 };
     sheet.addRow([]);
+    sheet.addRow(['Billable']).font = { bold: true };
 
     const vatLabel = `VAT ${Math.round(VAT_RATE * 100)}%`;
     const header = sheet.addRow([
@@ -250,6 +277,20 @@ router.get('/by-client.xlsx', async (req, res) => {
     ]);
     totalRow.font = { bold: true };
     totalRow.eachCell((cell) => (cell.border = { top: { style: 'thin' } }));
+
+    if (nonBillableRows.length > 0) {
+      sheet.addRow([]);
+      sheet.addRow(['Non-billable (not charged)']).font = { bold: true };
+      const nonBillableHeader = sheet.addRow(['Client', 'Hours', 'Days', 'Entries', 'Value', 'Travel']);
+      nonBillableHeader.font = { bold: true };
+      nonBillableHeader.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8ECF2' } };
+        cell.border = { bottom: { style: 'thin' } };
+      });
+      for (const c of nonBillableRows) {
+        sheet.addRow([c.clientName, c.hours, c.days, c.entries, c.amount, c.travelAmount]);
+      }
+    }
 
     sheet.columns.forEach((col, i) => {
       col.width = i === 0 ? 36 : 16;

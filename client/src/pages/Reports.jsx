@@ -11,6 +11,83 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const GROUPINGS = [
+  { value: 'client', label: 'Client', rows: 'byClient' },
+  { value: 'assignment', label: 'Assignment', rows: 'byAssignment' },
+  { value: 'consultant', label: 'Consultant', rows: 'byConsultant' },
+];
+
+const NAME_COLUMNS = {
+  client: [{ label: 'Client', value: (r) => r.clientName }],
+  assignment: [
+    { label: 'Assignment', value: (r) => r.assignmentTitle },
+    { label: 'Client', value: (r) => r.clientName },
+    { label: 'Billing', value: (r) => billingTypeLabel(r.billingType) },
+  ],
+  consultant: [{ label: 'Consultant', value: (r) => r.consultantName }],
+};
+
+const WORK_COLUMNS = [
+  { label: 'Hours', value: (r) => r.hours.toFixed(2) },
+  { label: 'Days', value: (r) => r.days.toFixed(2) },
+  { label: 'Entries', value: (r) => r.entries },
+];
+
+const TRAVEL_COLUMN = { label: 'Travel', value: (r) => formatEUR(r.travelAmount) };
+
+function billableColumns(groupBy, vatRate) {
+  const amount = [{ label: 'Amount', value: (r) => formatEUR(r.amount) }, TRAVEL_COLUMN];
+  if (groupBy === 'assignment') {
+    return [...NAME_COLUMNS.assignment, ...amount, { label: 'Invoiced', value: (r) => formatEUR(r.invoicedAmount) }];
+  }
+  if (groupBy === 'consultant') return [...NAME_COLUMNS.consultant, ...WORK_COLUMNS, ...amount];
+  return [
+    ...NAME_COLUMNS.client,
+    ...WORK_COLUMNS,
+    ...amount,
+    { label: 'Total excl. VAT', value: (r) => formatEUR(r.totalExclVat) },
+    {
+      label: `VAT ${Math.round(vatRate * 100)}%`,
+      value: (r) => (r.vatExempt ? <span className="muted">No VAT</span> : formatEUR(r.vatAmount)),
+    },
+    { label: 'Total incl. VAT', value: (r) => formatEUR(r.totalInclVat) },
+  ];
+}
+
+function nonBillableColumns(groupBy) {
+  return [
+    ...NAME_COLUMNS[groupBy],
+    ...WORK_COLUMNS,
+    { label: 'Value', value: (r) => formatEUR(r.amount) },
+    TRAVEL_COLUMN,
+  ];
+}
+
+function ReportTable({ columns, rows, action }) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          {columns.map((c) => (
+            <th key={c.label}>{c.label}</th>
+          ))}
+          {action && <th></th>}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r._id}>
+            {columns.map((c) => (
+              <td key={c.label}>{c.value(r)}</td>
+            ))}
+            {action && <td style={{ textAlign: 'right' }}>{action(r)}</td>}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export default function Reports() {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
@@ -20,6 +97,7 @@ export default function Reports() {
   const [invoicing, setInvoicing] = useState(false);
   const [loadedPeriod, setLoadedPeriod] = useState(null); // period the shown numbers belong to
   const [claimFor, setClaimFor] = useState(null); // consultant row whose km expense claim is open
+  const [groupBy, setGroupBy] = useState('client');
 
   async function load() {
     setLoading(true);
@@ -69,6 +147,28 @@ export default function Reports() {
   }
 
   const periodChanged = loadedPeriod && (loadedPeriod.from !== from || loadedPeriod.to !== to);
+  const rowsKey = GROUPINGS.find((g) => g.value === groupBy).rows;
+  const billableRows = report?.billable[rowsKey] || [];
+  const nonBillableRows = report?.nonBillable[rowsKey] || [];
+
+  // A claim covers all km of a consultant, billable or not, so each consultant gets one button
+  function kmClaimButton(row) {
+    return (
+      <button
+        className="btn btn-sm"
+        onClick={() => setClaimFor(row)}
+        disabled={periodChanged}
+        title={
+          periodChanged
+            ? 'Click Update first so the claim matches the selected period.'
+            : 'Expense claim for the km driven, at the official km rate'
+        }
+      >
+        Km claim
+      </button>
+    );
+  }
+  const billableConsultants = new Set(report?.billable.byConsultant.map((c) => c._id));
 
   async function exportByClient() {
     setExporting(true);
@@ -97,7 +197,6 @@ export default function Reports() {
       <div className="page-header">
         <div>
           <h1>Reports</h1>
-          <p>Registered income by client, consultant and assignment.</p>
         </div>
       </div>
 
@@ -143,133 +242,69 @@ export default function Reports() {
         <>
           <div className="stat-grid">
             <div className="stat">
-              <div className="label">Registered income</div>
+              <div className="label">Billable income</div>
               <div className="value">{formatEUR(report.grandTotal)}</div>
             </div>
             <div className="stat">
-              <div className="label">Travel costs</div>
+              <div className="label">Billable travel</div>
               <div className="value">{formatEUR(report.travelTotal)}</div>
             </div>
             <div className="stat">
               <div className="label">Total incl. VAT</div>
               <div className="value">{formatEUR(report.totalInclVat)}</div>
             </div>
+            <div className="stat stat-non-billable">
+              <div className="label">Non-billable work</div>
+              <div className="value">{formatEUR(report.nonBillableTotal)}</div>
+            </div>
           </div>
 
-          <h2 style={{ marginBottom: 10 }}>By client</h2>
+          <div className="report-group-by" role="radiogroup" aria-label="Group by">
+            <span>Group by</span>
+            {GROUPINGS.map((g) => (
+              <label className="checkbox-row" key={g.value}>
+                <input
+                  type="radio"
+                  name="reportGroupBy"
+                  checked={groupBy === g.value}
+                  onChange={() => setGroupBy(g.value)}
+                />
+                {g.label}
+              </label>
+            ))}
+          </div>
+
+          <h2 style={{ marginBottom: 10 }}>Billable</h2>
           <div className="table-wrap" style={{ marginBottom: 22 }}>
-            {report.byClient.length === 0 ? (
-              <div className="empty-state">No time logged in this period.</div>
+            {billableRows.length === 0 ? (
+              <div className="empty-state">No billable time in this period.</div>
             ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Client</th>
-                    <th>Hours</th>
-                    <th>Days</th>
-                    <th>Entries</th>
-                    <th>Amount</th>
-                    <th>Travel</th>
-                    <th>Total excl. VAT</th>
-                    <th>VAT {Math.round(report.vatRate * 100)}%</th>
-                    <th>Total incl. VAT</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.byClient.map((c) => (
-                    <tr key={c.clientName}>
-                      <td>{c.clientName}</td>
-                      <td>{c.hours.toFixed(2)}</td>
-                      <td>{c.days.toFixed(2)}</td>
-                      <td>{c.entries}</td>
-                      <td>{formatEUR(c.amount)}</td>
-                      <td>{formatEUR(c.travelAmount)}</td>
-                      <td>{formatEUR(c.totalExclVat)}</td>
-                      <td>{c.vatExempt ? <span className="muted">No VAT</span> : formatEUR(c.vatAmount)}</td>
-                      <td>{formatEUR(c.totalInclVat)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ReportTable
+                columns={billableColumns(groupBy, report.vatRate)}
+                rows={billableRows}
+                action={groupBy === 'consultant' ? kmClaimButton : null}
+              />
             )}
           </div>
 
-          <h2 style={{ marginBottom: 10 }}>By consultant</h2>
-          <div className="table-wrap" style={{ marginBottom: 22 }}>
-            {report.byConsultant.length === 0 ? (
-              <div className="empty-state">No time logged in this period.</div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Consultant</th>
-                    <th>Hours</th>
-                    <th>Days</th>
-                    <th>Entries</th>
-                    <th>Amount</th>
-                    <th>Travel</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.byConsultant.map((c) => (
-                    <tr key={c.consultantName}>
-                      <td>{c.consultantName}</td>
-                      <td>{c.hours.toFixed(2)}</td>
-                      <td>{c.days.toFixed(2)}</td>
-                      <td>{c.entries}</td>
-                      <td>{formatEUR(c.amount)}</td>
-                      <td>{formatEUR(c.travelAmount)}</td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button
-                          className="btn btn-sm"
-                          onClick={() => setClaimFor(c)}
-                          disabled={periodChanged}
-                          title={
-                            periodChanged
-                              ? 'Click Update first so the claim matches the selected period.'
-                              : 'Expense claim for the km driven, at the official km rate'
-                          }
-                        >
-                          Km claim
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          <h2 style={{ marginBottom: 10 }}>By assignment</h2>
-          <div className="table-wrap" style={{ marginBottom: 22 }}>
-            {report.byAssignment.length === 0 ? (
-              <div className="empty-state">No time logged in this period.</div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Assignment</th>
-                    <th>Billing</th>
-                    <th>Amount</th>
-                    <th>Travel</th>
-                    <th>Invoiced</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.byAssignment.map((a) => (
-                    <tr key={a.assignmentTitle}>
-                      <td>{a.assignmentTitle}</td>
-                      <td>{billingTypeLabel(a.billingType)}</td>
-                      <td>{formatEUR(a.amount)}</td>
-                      <td>{formatEUR(a.travelAmount)}</td>
-                      <td>{formatEUR(a.invoicedAmount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {nonBillableRows.length > 0 && (
+            <>
+              <h2 style={{ marginBottom: 10 }}>
+                Non-billable <span className="badge status-inactive">Not charged</span>
+              </h2>
+              <div className="table-wrap report-non-billable" style={{ marginBottom: 22 }}>
+                <ReportTable
+                  columns={nonBillableColumns(groupBy)}
+                  rows={nonBillableRows}
+                  action={
+                    groupBy === 'consultant'
+                      ? (row) => (billableConsultants.has(row._id) ? null : kmClaimButton(row))
+                      : null
+                  }
+                />
+              </div>
+            </>
+          )}
         </>
       )}
 
