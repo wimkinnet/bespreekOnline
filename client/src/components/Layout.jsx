@@ -94,6 +94,9 @@ export default function Layout() {
               <NavLink to="/reports" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
                 Reports
               </NavLink>
+              <NavLink to="/invoices" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+                Invoices
+              </NavLink>
               <NavLink to="/consultants" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
                 Consultants
               </NavLink>
