@@ -10,6 +10,7 @@ export default function Invoices() {
   const [creating, setCreating] = useState(null); // id of the client whose PDF is being made
   const [brands, setBrands] = useState({}); // chosen brand per client id; bespreek unless changed
   const [issuing, setIssuing] = useState(null); // id of the client whose invoice is being created
+  const [preview, setPreview] = useState(null); // { title, url, fileName } of the PDF shown in the preview
 
   function load() {
     return Promise.all([api.get('/invoices/open'), api.get('/invoices/created')])
@@ -65,13 +66,28 @@ export default function Invoices() {
     }
   }
 
-  async function downloadPdf(client) {
+  // Shows a PDF the server answers with in the preview, from where it can also be downloaded
+  async function openPreview(title, url, fileName, params) {
+    const res = await api.get(url, { params, responseType: 'blob' });
+    const pdf = new Blob([res.data], { type: 'application/pdf' });
+    setPreview({ title, url: URL.createObjectURL(pdf), fileName });
+  }
+
+  function closePreview() {
+    URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  }
+
+  async function previewConcept(client) {
     setCreating(client._id);
     setError('');
     try {
-      await saveFile(`/invoices/${client._id}/pdf`, `factuur-concept_${client.name.replace(/[^\w-]+/g, '_')}.pdf`, {
-        brand: brands[client._id] || 'bespreek',
-      });
+      await openPreview(
+        `Concept invoice · ${client.name}`,
+        `/invoices/${client._id}/pdf`,
+        `factuur-concept_${client.name.replace(/[^\w-]+/g, '_')}.pdf`,
+        { brand: brands[client._id] || 'bespreek' }
+      );
     } catch (err) {
       // The answer was requested as a file, so an error message arrives as one too
       const text = await err.response?.data?.text?.();
@@ -120,6 +136,15 @@ export default function Invoices() {
   const unpaid = created.filter((i) => !i.paidAt);
   const overdue = unpaid.filter((i) => paymentStatus(i).className === 'invoice-overdue');
   const sumIncl = (list) => list.reduce((total, i) => total + i.totalInclVat, 0);
+
+  async function previewCreated(invoice) {
+    setError('');
+    try {
+      await openPreview(`Invoice ${invoice.invoiceNumber} · ${invoice.client?.name}`, `/documents/${invoice._id}/download`, invoice.originalName);
+    } catch {
+      setError(`Could not show invoice ${invoice.invoiceNumber}.`);
+    }
+  }
 
   async function downloadCreated(invoice) {
     setError('');
@@ -186,7 +211,7 @@ export default function Invoices() {
                         <option value="bespreek">bespreek</option>
                         <option value="catalista">Catalista</option>
                       </select>
-                      <button className="btn btn-sm" onClick={() => downloadPdf(i.client)} disabled={creating === i.client._id}>
+                      <button className="btn btn-sm" onClick={() => previewConcept(i.client)} disabled={creating === i.client._id}>
                         {creating === i.client._id ? 'Creating…' : 'Concept'}
                       </button>
                       <button className="btn btn-sm btn-primary" onClick={() => createInvoice(i)} disabled={issuing === i.client._id}>
@@ -254,6 +279,9 @@ export default function Invoices() {
                           Mark paid
                         </button>
                       )}
+                      <button className="btn btn-sm" onClick={() => previewCreated(i)}>
+                        Preview
+                      </button>
                       <button className="btn btn-sm" onClick={() => downloadCreated(i)}>
                         Download
                       </button>
@@ -265,6 +293,28 @@ export default function Invoices() {
           </table>
         )}
       </div>
+
+      {preview && (
+        <div className="modal-backdrop" onClick={closePreview}>
+          <div className="modal pdf-preview" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{preview.title}</h2>
+              <div className="row-actions">
+                <a className="btn btn-sm" href={preview.url} download={preview.fileName}>
+                  Download
+                </a>
+                <a className="btn btn-sm" href={preview.url} target="_blank" rel="noreferrer">
+                  Open in new tab
+                </a>
+                <button className="btn btn-sm" onClick={closePreview}>
+                  Close
+                </button>
+              </div>
+            </div>
+            <iframe title={preview.title} src={preview.url} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

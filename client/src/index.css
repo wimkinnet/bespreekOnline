@@ -939,6 +939,25 @@ input[type='date']::-webkit-date-and-time-value {
   max-width: 760px;
 }
 
+.pdf-preview {
+  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  height: min(calc(100vh - 100px), 1100px);
+}
+
+.pdf-preview .modal-header {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pdf-preview iframe {
+  flex: 1;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
