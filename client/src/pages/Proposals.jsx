@@ -20,24 +20,68 @@ const ASSIGNMENT_OPTIONS = [
 
 const today = () => new Intl.DateTimeFormat('en-CA').format(new Date());
 
-function emptyProposal() {
+// The texts of the Sint Lutgardis proposal, which a new proposal starts from
+const EXAMPLE = {
+  introduction:
+    'De school wil een kwaliteitscyclus implementeren en uitvoeren de komende jaren. Het beleidsteam heeft hiertoe nood aan een houvast: een flexibel kwaliteitsdatasysteem dat in eerste instantie gebouwd wordt op basis van het huidige strategische plan van de school.',
+  goal:
+    'Catalista heeft voor deze doelstellingen een plan van aanpak uitgewerkt. Dit plan laat toe een concreet kwaliteitszorgproces op te starten in de loop van het tweede trimester van het schooljaar 2026-2027.',
+  steps: [
+    {
+      title: 'Kwaliteitsdossier opmaken',
+      days: 0.5,
+      description:
+        'We werken een halve dag met het beleidsteam aan een kwaliteitsdossier: vanuit het ROK en het strategisch plan van de school kijken we naar welke databronnen de school al actief gebruikt en waar nog kansen liggen. We denken samen na over geschikte drempelwaarden voor de kwaliteit van de school. (halve dag voorbereiding + halve dag naverwerking voor Catalista)',
+    },
+    {
+      title: 'Data voor het kwaliteitsdossier vinden, interpreteren en gebruiken in het kwaliteitsdossier',
+      days: 2,
+      description:
+        'We werken 2 dagen samen met het beleidsteam aan een datawijzer/dataloep/… analyse in functie van het invullen en versterken van het kwaliteitsdossier. Het team gaat effectief mee aan de slag zodat data helder en vindbaar worden. Tussen de 2 dagen werkt het team verder, zodat op het einde van dag 2 het dossier zo goed als klaar kan worden beschouwd. (+ halve dag tussendoor begeleidingswerk door Catalista)',
+    },
+    {
+      title: 'Vanuit de data het strategisch en actieplan effectiever maken door scherpe doelen te stellen en een proces te bepalen',
+      days: 0.5,
+      description:
+        'Vanuit het kwaliteitsdossier met de data kijken wij terug naar het strategisch plan en het actieplan van de school. We scherpen de doelen aan om ze zo effectief en meetbaar mogelijk te formuleren. We bepalen ook het proces of de cyclus om de kwaliteitsopvolging effectief neer te zetten op de beleidsvloer en eventueel de klasvloer. Deze laatste stap neemt een halve dag samenwerken met het beleidsteam op. (+ een halve dag voorbereiding voor Catalista)',
+    },
+  ],
+  requirements:
+    'Voor stap 1 is toegang nodig tot de kerndocumenten en de databronnen van de school (datawijzer, smartschool, … en ook strategische plannen, prioriteitenplannen, …).',
+  supportDays: 2,
+  supportLabel: 'Ondersteunend werk in voorbereiding of verwerking van de begeleidingsdagen',
+  dayRate: 950,
+  conditions: { travelRate: 0.45, invoicing: 'monthly', paymentTermDays: 30, clientCosts: true },
+};
+
+// The texts, steps and budget of `source` (a proposal or the example), for a new proposal; the dates stay empty
+function copyTexts(form, source) {
   return {
-    client: '',
-    title: '',
-    date: today(),
-    brand: 'catalista',
-    status: 'draft',
-    consultants: [],
-    introduction: '',
-    goal: '',
-    steps: [{ title: '', description: '', proposedDates: '', days: 0.5 }],
-    requirements: '',
-    supportDays: 0,
-    supportLabel: 'Ondersteunend werk in voorbereiding of verwerking van de begeleidingsdagen',
-    dayRate: 950,
-    conditions: { travelRate: 0.45, invoicing: 'monthly', paymentTermDays: 30, clientCosts: true },
-    assignmentMode: 'none',
+    ...form,
+    introduction: source.introduction || '',
+    goal: source.goal || '',
+    steps: (source.steps || []).map((s) => ({ title: s.title, description: s.description || '', proposedDates: '', days: s.days })),
+    requirements: source.requirements || '',
+    supportDays: source.supportDays || 0,
+    supportLabel: source.supportLabel || EXAMPLE.supportLabel,
+    dayRate: source.dayRate ?? EXAMPLE.dayRate,
+    conditions: { ...EXAMPLE.conditions, ...source.conditions },
   };
+}
+
+function emptyProposal(source = EXAMPLE) {
+  return copyTexts(
+    {
+      client: '',
+      title: '',
+      date: today(),
+      brand: 'catalista',
+      status: 'draft',
+      consultants: [],
+      assignmentMode: 'none',
+    },
+    source
+  );
 }
 
 // The stored proposal as form values
@@ -58,8 +102,21 @@ function totals(form) {
 }
 
 // The dialog in which a proposal is written, previewed and saved
-function ProposalEditor({ initial, clients, users, onClose, onSaved }) {
-  const [form, setForm] = useState(() => (initial ? toForm(initial) : emptyProposal()));
+function ProposalEditor({ initial, source, proposals, clients, users, onClose, onSaved }) {
+  const [form, setForm] = useState(() => (initial ? toForm(initial) : emptyProposal(source || EXAMPLE)));
+  const [sourceId, setSourceId] = useState(source?._id || 'example');
+
+  // A new proposal can take its texts from the example or from any earlier proposal
+  function chooseSource(id) {
+    setSourceId(id);
+    setForm((f) => copyTexts(f, id === 'example' ? EXAMPLE : proposals.find((p) => p._id === id)));
+  }
+
+  // Choosing a client suggests the title of the example, until a title is typed
+  function chooseClient(id) {
+    const client = clients.find((c) => c._id === id);
+    setForm((f) => ({ ...f, client: id, title: f.title || (client ? `Opzet kwaliteitszorgsysteem voor ${client.name}` : '') }));
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [preview, setPreview] = useState(null);
@@ -142,10 +199,26 @@ function ProposalEditor({ initial, clients, users, onClose, onSaved }) {
         </div>
         {error && <div className="error-banner">{error}</div>}
         <form onSubmit={save}>
+          {!initial && (
+            <div className="field">
+              <label>Start from</label>
+              <select value={sourceId} onChange={(e) => chooseSource(e.target.value)}>
+                <option value="example">The example texts (Sint Lutgardis)</option>
+                {proposals.map((p) => (
+                  <option key={p._id} value={p._id}>
+                    {p.number} · {p.client?.name} · {p.title}
+                  </option>
+                ))}
+              </select>
+              <p className="muted" style={{ marginTop: 6 }}>
+                Copies the texts, steps, budget and conditions. Dates, client, title and consultants are not copied.
+              </p>
+            </div>
+          )}
           <div className="field-row">
             <div className="field">
               <label>Client</label>
-              <select required value={form.client} onChange={(e) => set('client', e.target.value)}>
+              <select required value={form.client} onChange={(e) => chooseClient(e.target.value)}>
                 <option value="">Choose a client</option>
                 {clients.map((c) => (
                   <option key={c._id} value={c._id}>
@@ -433,9 +506,10 @@ export default function Proposals() {
     load().catch(() => setError('Could not load the proposals.'));
   }, []);
 
-  async function openEditor(proposal) {
+  async function openEditor(proposal, duplicate = false) {
     setMessage('');
     if (!proposal) return setEditing('new');
+    if (duplicate) return setEditing({ duplicateOf: proposal });
     const { data } = await api.get(`/proposals/${proposal._id}`);
     setEditing(data);
   }
@@ -526,6 +600,9 @@ export default function Proposals() {
                       <button className="btn btn-sm btn-primary" onClick={() => openEditor(p)}>
                         Edit
                       </button>
+                      <button className="btn btn-sm" onClick={() => openEditor(p, true)}>
+                        Duplicate
+                      </button>
                       <button className="btn btn-sm" onClick={() => showPdf(p, false)}>
                         Preview
                       </button>
@@ -548,7 +625,9 @@ export default function Proposals() {
 
       {editing && (
         <ProposalEditor
-          initial={editing === 'new' ? null : editing}
+          initial={editing === 'new' || editing.duplicateOf ? null : editing}
+          source={editing.duplicateOf}
+          proposals={proposals}
           clients={clients}
           users={users}
           onClose={() => setEditing(null)}
