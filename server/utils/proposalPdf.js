@@ -35,6 +35,27 @@ const INVOICING = {
   end: 'Facturatie gebeurt na afloop van de begeleiding',
 };
 
+// Optional clauses in the order they are printed; `name` is who the proposal is from
+const CLAUSES = {
+  gdpr: (name) =>
+    `${name} verwerkt persoonsgegevens, zoals leerlingengegevens, uitsluitend in opdracht van de opdrachtgever en volgens een afzonderlijke verwerkersovereenkomst conform de GDPR`,
+  cancellation: () =>
+    'Bij annulering of verplaatsing van een begeleidingsmoment minder dan 10 werkdagen vooraf wordt 50% van dat moment aangerekend, minder dan 2 werkdagen vooraf 100%',
+  validity: () => 'Deze offerte is 60 dagen geldig vanaf de offertedatum',
+  latePayment: () =>
+    'Bij laattijdige betaling zijn van rechtswege en zonder ingebrekestelling de wettelijke verwijlintresten en een forfaitaire schadevergoeding verschuldigd, volgens de wet betreffende de bestrijding van de betalingsachterstand bij handelstransacties',
+  extraWork: () => 'Bijkomende dagen of dagdelen worden aangerekend aan het dagtarief van deze offerte, na akkoord van de opdrachtgever',
+  liability: (name) =>
+    `${name} levert een inspanningsverbintenis. De aansprakelijkheid is beperkt tot het gefactureerde bedrag van deze opdracht`,
+  materials: (name) =>
+    `De opdrachtgever mag het voor deze opdracht ontwikkelde materiaal intern gebruiken. ${name} behoudt de rechten op haar methodes, sjablonen en instrumenten`,
+  confidentiality: () => 'Beide partijen behandelen alle vertrouwelijke informatie die ze van elkaar ontvangen als vertrouwelijk',
+  indexation: () => 'Het dagtarief wordt jaarlijks op 1 januari aangepast aan de evolutie van de gezondheidsindex',
+  acceptance: () => 'De offerte wordt aanvaard door ondertekening of door bevestiging per e-mail',
+  law: (name, company) =>
+    `Op deze overeenkomst is het Belgisch recht van toepassing. Bij een geschil zijn de rechtbanken van het gerechtelijk arrondissement van de zetel van ${company.name} bevoegd`,
+};
+
 const eur = (n) => new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(n);
 const num = (n) => new Intl.NumberFormat('nl-BE', { maximumFractionDigits: 2 }).format(n);
 const longDate = (d) => new Intl.DateTimeFormat('nl-BE', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(d));
@@ -179,13 +200,17 @@ function renderProposalPdf(proposal, stream) {
   y = sectionPage('Voorwaarden');
   y = subheading('Facturatie en betalingsvoorwaarden', y);
   const c = proposal.conditions || {};
+  const from = proposal.brand === 'bespreek' ? proposal.company.name : 'Catalista';
   const bullets = [
-    `Verplaatsingskosten worden aangerekend aan ${eur(c.travelRate ?? 0.45)}/km (excl. btw)`,
+    `Verplaatsingskosten worden aangerekend aan ${eur(c.travelRate ?? 0.45)}/km (excl. btw), heen en terug vanaf de woonplaats van de begeleider`,
     INVOICING[c.invoicing] || INVOICING.monthly,
     `Betalingstermijn van facturen is ${c.paymentTermDays || 30} dagen na factuurdatum`,
     ...(c.clientCosts !== false
       ? ['Praktische organisatie (planning scholen), kopiekosten, cateringkosten en lokaalkosten zijn voor rekening van de opdrachtgever']
       : []),
+    ...Object.entries(CLAUSES)
+      .filter(([key]) => (key === 'indexation' ? c[key] === true : c[key] !== false)) // indexation only when chosen
+      .map(([, text]) => text(from, proposal.company)),
   ];
   for (const b of bullets) {
     doc.circle(left + 4, y + 6, 2.5).fill(brand.main);

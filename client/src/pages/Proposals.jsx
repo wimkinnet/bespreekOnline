@@ -51,8 +51,40 @@ const EXAMPLE = {
   supportDays: 2,
   supportLabel: 'Ondersteunend werk in voorbereiding of verwerking van de begeleidingsdagen',
   dayRate: 950,
-  conditions: { travelRate: 0.45, invoicing: 'monthly', paymentTermDays: 30, clientCosts: true },
+  conditions: {
+    travelRate: 0.45,
+    invoicing: 'monthly',
+    paymentTermDays: 30,
+    clientCosts: true,
+    gdpr: true,
+    cancellation: true,
+    validity: true,
+    latePayment: true,
+    extraWork: true,
+    liability: true,
+    materials: true,
+    confidentiality: true,
+    indexation: false,
+    acceptance: true,
+    law: true,
+  },
 };
+
+// The clauses that can be switched on or off; the full Dutch text is in the PDF
+const CLAUSE_OPTIONS = [
+  ['clientCosts', 'Practical organisation, copies, catering and rooms are paid by the client'],
+  ['gdpr', 'Personal data only under a separate data processing agreement (GDPR)'],
+  ['cancellation', 'Cancelling: 50% under 10 working days, 100% under 2 working days'],
+  ['validity', 'The proposal is valid for 60 days'],
+  ['latePayment', 'Statutory interest and fixed compensation for late payment'],
+  ['extraWork', 'Extra days at the day rate, after agreement'],
+  ['liability', 'Best-efforts obligation, liability limited to the amount invoiced'],
+  ['materials', 'Client may use the materials internally; methods and templates stay ours'],
+  ['confidentiality', 'Both parties keep confidential information confidential'],
+  ['indexation', 'Day rate indexed each 1 January (health index)'],
+  ['acceptance', 'Accepted by signature or by email'],
+  ['law', 'Belgian law, courts of the district of our registered office'],
+];
 
 // The texts, steps and budget of `source` (a proposal or the example), for a new proposal; the dates stay empty
 function copyTexts(form, source) {
@@ -419,14 +451,14 @@ function ProposalEditor({ initial, source, proposals, clients, users, onClose, o
               </select>
             </div>
           </div>
-          <label className="checkbox-row" style={{ marginBottom: 14 }}>
-            <input
-              type="checkbox"
-              checked={form.conditions.clientCosts}
-              onChange={(e) => setCondition('clientCosts', e.target.checked)}
-            />
-            Practical organisation, copies, catering and rooms are paid by the client
-          </label>
+          <div className="proposal-clauses">
+            {CLAUSE_OPTIONS.map(([key, label]) => (
+              <label key={key} className="checkbox-row">
+                <input type="checkbox" checked={!!form.conditions[key]} onChange={(e) => setCondition(key, e.target.checked)} />
+                {label}
+              </label>
+            ))}
+          </div>
 
           <h3>When accepted</h3>
           <div className="field">

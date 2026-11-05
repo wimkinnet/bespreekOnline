@@ -33,6 +33,18 @@ const proposalSchema = new mongoose.Schema(
       invoicing: { type: String, enum: ['monthly', 'per_step', 'end'], default: 'monthly' },
       paymentTermDays: { type: Number, default: 30 },
       clientCosts: { type: Boolean, default: true },
+      // Market-practice clauses, each switched on or off per proposal (texts in utils/proposalPdf.js)
+      gdpr: { type: Boolean, default: true },
+      cancellation: { type: Boolean, default: true },
+      validity: { type: Boolean, default: true },
+      latePayment: { type: Boolean, default: true },
+      extraWork: { type: Boolean, default: true },
+      liability: { type: Boolean, default: true },
+      materials: { type: Boolean, default: true },
+      confidentiality: { type: Boolean, default: true },
+      indexation: { type: Boolean, default: false },
+      acceptance: { type: Boolean, default: true },
+      law: { type: Boolean, default: true },
     },
     // What accepting the proposal creates: nothing, one assignment, or one per step
     assignmentMode: { type: String, enum: ['none', 'single', 'per_step'], default: 'none' },

@@ -438,6 +438,14 @@ textarea {
   background: var(--accent-tint);
 }
 
+.proposal-clauses {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 13.5px;
+}
+
 .proposal-step {
   border: 1px solid var(--border);
   border-radius: var(--radius);
