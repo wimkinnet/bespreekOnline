@@ -15,6 +15,7 @@
   --shadow: 0 1px 2px rgba(20, 48, 47, 0.06);
   --font-body: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Source Serif 4', Georgia, serif;
+  --chart: #00a19d; /* a step brighter than --accent, which reads too gray as a chart fill */
 }
 
 * {
@@ -382,6 +383,197 @@ textarea {
 
 .report-non-billable td {
   color: var(--ink-soft);
+}
+
+/* ---------- Dashboard ---------- */
+
+.dash-stat-link {
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+
+.dash-stat-link:hover {
+  border-color: var(--accent);
+}
+
+.dash-stat-note {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.dash-grid .card + .card {
+  margin-top: 0;
+}
+
+.dash-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dash-card-head h2 {
+  margin: 0;
+}
+
+.dash-card-head .muted {
+  font-size: 12.5px;
+}
+
+.dash-chart-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.dash-chart-readout strong {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.dash-chart-plot {
+  position: relative;
+  height: 170px;
+  margin-left: 44px;
+}
+
+.dash-chart-grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.dash-chart-tick {
+  position: relative;
+  border-top: 1px solid var(--border);
+  height: 0;
+}
+
+.dash-chart-tick span {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: -8px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.dash-chart-columns {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: 2px;
+}
+
+.dash-chart-slot {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: default;
+  border-radius: 4px;
+}
+
+.dash-chart-slot.active {
+  background: var(--accent-tint);
+}
+
+.dash-chart-slot:focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+.dash-chart-bar {
+  width: 24px;
+  max-width: 60%;
+  background: var(--chart);
+  border-radius: 4px 4px 0 0;
+}
+
+.dash-chart-labels {
+  display: flex;
+  gap: 2px;
+  margin: 6px 0 0 44px;
+}
+
+.dash-chart-labels span {
+  flex: 1;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+.dash-chart-table {
+  margin-top: 12px;
+  font-size: 12.5px;
+}
+
+.dash-chart-table summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+.dash-chart-table table {
+  margin-top: 6px;
+}
+
+.dash-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  color: inherit;
+  text-decoration: none;
+}
+
+.dash-item:hover .dash-item-main {
+  color: var(--accent-dark);
+}
+
+.dash-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 13.5px;
+}
+
+.dash-item-main .muted {
+  font-size: 12px;
+}
+
+.dash-more {
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .dash-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ---------- Tables ---------- */
