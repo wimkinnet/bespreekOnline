@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
+import TimeEntryForm from '../components/TimeEntryForm';
 import { billingTypeLabel, statusLabel, rateUnitLabel } from '../utils/format';
 
 export default function Assignments() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [logFor, setLogFor] = useState(null); // assignment time is being logged on
+  const [saved, setSaved] = useState('');
   const [assignments, setAssignments] = useState([]);
   const [status, setStatus] = useState('active');
   const [mine, setMine] = useState(false);
@@ -23,6 +28,11 @@ export default function Assignments() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, mine]);
+
+  // The same rule as on the assignment page: admins, or consultants staffed on it, while it is still running
+  const canLogTime = (a) =>
+    !['completed', 'cancelled', 'invoiced'].includes(a.status) &&
+    (user.role === 'admin' || a.consultants?.some((c) => c._id === user.id));
 
   return (
     <div>
@@ -53,6 +63,8 @@ export default function Assignments() {
         </label>
       </div>
 
+      {saved && <div className="success-banner">{saved}</div>}
+
       <div className="table-wrap">
         {loading ? (
           <p className="muted" style={{ padding: 20 }}>
@@ -70,6 +82,7 @@ export default function Assignments() {
                 <th>Rate</th>
                 <th>Consultants</th>
                 <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -91,12 +104,50 @@ export default function Assignments() {
                   <td>
                     <span className={`badge status-${a.status}`}>{statusLabel(a.status)}</span>
                   </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {canLogTime(a) && (
+                      <button
+                        className="btn btn-sm"
+                        style={{ whiteSpace: 'nowrap' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSaved('');
+                          setLogFor(a);
+                        }}
+                      >
+                        Log time
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {logFor && (
+        <div className="modal-backdrop">
+          <div className="modal modal-wide">
+            <div className="modal-header">
+              <div>
+                <h2>Log time</h2>
+                <p className="muted" style={{ margin: 0 }}>
+                  {logFor.title} · {logFor.client?.name}
+                </p>
+              </div>
+            </div>
+            <TimeEntryForm
+              assignment={logFor}
+              onSaved={() => {
+                setSaved(`Time logged on ${logFor.title}.`);
+                setLogFor(null);
+              }}
+              onCancel={() => setLogFor(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

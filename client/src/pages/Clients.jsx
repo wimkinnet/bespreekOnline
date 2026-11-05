@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { clientTypeLabel } from '../utils/format';
+import NewAssignmentModal from '../components/NewAssignmentModal';
 import ClientForm from '../components/ClientForm';
 
 export default function Clients() {
@@ -14,6 +15,7 @@ export default function Clients() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [assignmentFor, setAssignmentFor] = useState(null); // client the new assignment is for
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -103,6 +105,7 @@ export default function Clients() {
                 <th>City</th>
                 <th>Contact</th>
                 <th>Status</th>
+                {user.role === 'admin' && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -118,12 +121,33 @@ export default function Clients() {
                   <td>
                     <span className={`badge status-${c.status}`}>{c.status}</span>
                   </td>
+                  {user.role === 'admin' && (
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        className="btn btn-sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAssignmentFor(c);
+                        }}
+                      >
+                        + Assignment
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {assignmentFor && (
+        <NewAssignmentModal
+          client={assignmentFor}
+          onClose={() => setAssignmentFor(null)}
+          onCreated={(assignment) => navigate(`/assignments/${assignment._id}`)}
+        />
+      )}
 
       {showForm && (
         <div className="modal-backdrop" onClick={() => setShowForm(false)}>

@@ -3,18 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import ClientForm, { clientToForm } from '../components/ClientForm';
+import NewAssignmentModal from '../components/NewAssignmentModal';
 import { formatDate, billingTypeLabel, statusLabel, clientTypeLabel, rateUnitLabel } from '../utils/format';
-
-const emptyAssignment = {
-  title: '',
-  description: '',
-  billingType: 'hourly',
-  rate: '',
-  status: 'active',
-  startDate: '',
-  endDate: '',
-  consultants: [],
-};
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -26,7 +16,6 @@ export default function ClientDetail() {
   const [groupAssignments, setGroupAssignments] = useState([]);
   const [schools, setSchools] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [consultants, setConsultants] = useState([]);
   const [groupError, setGroupError] = useState('');
   const [editing, setEditing] = useState(false);
   const [savingClient, setSavingClient] = useState(false);
@@ -36,9 +25,6 @@ export default function ClientDetail() {
   const [loading, setLoading] = useState(true);
 
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
-  const [assignmentForm, setAssignmentForm] = useState(emptyAssignment);
-  const [savingAssignment, setSavingAssignment] = useState(false);
-  const [assignmentError, setAssignmentError] = useState('');
 
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadCategory, setUploadCategory] = useState('document');
@@ -66,17 +52,7 @@ export default function ClientDetail() {
   useEffect(() => {
     if (user.role !== 'admin') return;
     api.get('/clients', { params: { type: 'school_pool' } }).then(({ data }) => setGroups(data));
-    api.get('/users').then(({ data }) => setConsultants(data.filter((u) => u.active)));
   }, [user.role]);
-
-  function toggleAssignmentConsultant(userId) {
-    setAssignmentForm((f) => ({
-      ...f,
-      consultants: f.consultants.includes(userId)
-        ? f.consultants.filter((c) => c !== userId)
-        : [...f.consultants, userId],
-    }));
-  }
 
   async function handleChangeGroup(parentPool) {
     setGroupError('');
@@ -99,32 +75,6 @@ export default function ClientDetail() {
       setClientError(err.response?.data?.message || 'Could not update client.');
     } finally {
       setSavingClient(false);
-    }
-  }
-
-  async function handleCreateAssignment(e) {
-    e.preventDefault();
-    setSavingAssignment(true);
-    setAssignmentError('');
-    try {
-      await api.post('/assignments', {
-        client: id,
-        title: assignmentForm.title,
-        description: assignmentForm.description,
-        billingType: assignmentForm.billingType,
-        rate: Number(assignmentForm.rate),
-        status: assignmentForm.status,
-        startDate: assignmentForm.startDate || undefined,
-        endDate: assignmentForm.endDate || undefined,
-        consultants: assignmentForm.consultants,
-      });
-      setShowAssignmentForm(false);
-      setAssignmentForm(emptyAssignment);
-      load();
-    } catch (err) {
-      setAssignmentError(err.response?.data?.message || 'Could not create assignment.');
-    } finally {
-      setSavingAssignment(false);
     }
   }
 
@@ -492,114 +442,14 @@ export default function ClientDetail() {
       )}
 
       {showAssignmentForm && (
-        <div className="modal-backdrop" onClick={() => setShowAssignmentForm(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>New assignment</h2>
-              <button className="btn btn-sm" onClick={() => setShowAssignmentForm(false)}>
-                Close
-              </button>
-            </div>
-            {assignmentError && <div className="error-banner">{assignmentError}</div>}
-            <form onSubmit={handleCreateAssignment}>
-              <div className="field">
-                <label>Title</label>
-                <input
-                  required
-                  value={assignmentForm.title}
-                  onChange={(e) => setAssignmentForm({ ...assignmentForm, title: e.target.value })}
-                />
-              </div>
-              <div className="field">
-                <label>Description</label>
-                <textarea
-                  rows={2}
-                  value={assignmentForm.description}
-                  onChange={(e) => setAssignmentForm({ ...assignmentForm, description: e.target.value })}
-                />
-              </div>
-              <div className="field-row">
-                <div className="field">
-                  <label>Billing type</label>
-                  <select
-                    value={assignmentForm.billingType}
-                    onChange={(e) => setAssignmentForm({ ...assignmentForm, billingType: e.target.value })}
-                  >
-                    <option value="hourly">Per hour</option>
-                    <option value="daily">Per day</option>
-                    <option value="half_day">Per half day</option>
-                    <option value="fixed">Fixed fee</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label>
-                    Rate (€
-                    {assignmentForm.billingType === 'fixed'
-                      ? ' total'
-                      : ` / ${rateUnitLabel(assignmentForm.billingType)}`}
-                    )
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    required
-                    value={assignmentForm.rate}
-                    onChange={(e) => setAssignmentForm({ ...assignmentForm, rate: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="field-row">
-                <div className="field">
-                  <label>Start date</label>
-                  <input
-                    type="date"
-                    value={assignmentForm.startDate}
-                    onChange={(e) => setAssignmentForm({ ...assignmentForm, startDate: e.target.value })}
-                  />
-                </div>
-                <div className="field">
-                  <label>End date</label>
-                  <input
-                    type="date"
-                    value={assignmentForm.endDate}
-                    onChange={(e) => setAssignmentForm({ ...assignmentForm, endDate: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="field">
-                <label>Status</label>
-                <select
-                  value={assignmentForm.status}
-                  onChange={(e) => setAssignmentForm({ ...assignmentForm, status: e.target.value })}
-                >
-                  <option value="prospect">Prospect</option>
-                  <option value="active">Active</option>
-                  <option value="on_hold">On hold</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>Staffed consultants</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {consultants.map((u) => (
-                    <label className="checkbox-row" key={u.id}>
-                      <input
-                        type="checkbox"
-                        checked={assignmentForm.consultants.includes(u.id)}
-                        onChange={() => toggleAssignmentConsultant(u.id)}
-                      />
-                      {u.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <button className="btn btn-primary" type="submit" disabled={savingAssignment}>
-                {savingAssignment ? 'Saving…' : 'Create assignment'}
-              </button>
-            </form>
-          </div>
-        </div>
+        <NewAssignmentModal
+          client={client}
+          onClose={() => setShowAssignmentForm(false)}
+          onCreated={() => {
+            setShowAssignmentForm(false);
+            load();
+          }}
+        />
       )}
 
       <p style={{ marginTop: 20 }}>

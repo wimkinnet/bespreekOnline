@@ -890,6 +890,16 @@ input[type='date']::-webkit-date-and-time-value {
   color: var(--ink-soft);
 }
 
+.success-banner {
+  background: var(--accent-tint);
+  color: var(--accent-dark);
+  border: 1px solid var(--accent);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  margin-bottom: 14px;
+  font-size: 13.5px;
+}
+
 .error-banner {
   background: var(--danger-tint);
   color: var(--danger);
