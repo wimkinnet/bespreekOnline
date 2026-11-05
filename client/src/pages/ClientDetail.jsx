@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import ClientForm, { clientToForm } from '../components/ClientForm';
 import NewAssignmentModal from '../components/NewAssignmentModal';
+import FilePreviewModal, { canPreview } from '../components/FilePreviewModal';
 import { formatDate, billingTypeLabel, statusLabel, clientTypeLabel, rateUnitLabel } from '../utils/format';
 
 export default function ClientDetail() {
@@ -31,6 +32,8 @@ export default function ClientDetail() {
   const [uploadAssignment, setUploadAssignment] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [preview, setPreview] = useState(null); // file shown in the preview
+  const [documentError, setDocumentError] = useState('');
 
   async function load() {
     setLoading(true);
@@ -85,10 +88,11 @@ export default function ClientDetail() {
     setUploadError('');
     try {
       const formData = new FormData();
-      formData.append('file', uploadFile);
+      // The file goes last: the server picks the client's folder from the fields sent before it
       formData.append('client', id);
       formData.append('category', uploadCategory);
       if (uploadAssignment) formData.append('assignment', uploadAssignment);
+      formData.append('file', uploadFile);
       await api.post('/documents', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setUploadFile(null);
       setUploadAssignment('');
@@ -99,6 +103,22 @@ export default function ClientDetail() {
     } finally {
       setUploading(false);
     }
+  }
+
+  async function handlePreview(doc) {
+    setDocumentError('');
+    try {
+      const res = await api.get(`/documents/${doc._id}/download`, { responseType: 'blob' });
+      const file = new Blob([res.data], { type: doc.mimeType });
+      setPreview({ title: doc.originalName, url: URL.createObjectURL(file), fileName: doc.originalName, mimeType: doc.mimeType });
+    } catch {
+      setDocumentError(`Could not show ${doc.originalName}.`);
+    }
+  }
+
+  function closePreview() {
+    URL.revokeObjectURL(preview.url);
+    setPreview(null);
   }
 
   async function handleDownload(doc) {
@@ -253,7 +273,7 @@ export default function ClientDetail() {
           Assignments ({assignments.length})
         </div>
         <div className={`tab ${tab === 'documents' ? 'active' : ''}`} onClick={() => setTab('documents')}>
-          Documents & bills ({documents.length})
+          Documents & invoices ({documents.length})
         </div>
         {client.type === 'school_pool' && (
           <div className={`tab ${tab === 'schools' ? 'active' : ''}`} onClick={() => setTab('schools')}>
@@ -381,7 +401,7 @@ export default function ClientDetail() {
                 <label>Category</label>
                 <select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)}>
                   <option value="document">Document</option>
-                  <option value="bill">Bill / invoice</option>
+                  <option value="bill">Invoice</option>
                 </select>
               </div>
               <div className="field" style={{ marginBottom: 0 }}>
@@ -401,6 +421,7 @@ export default function ClientDetail() {
             </form>
           </div>
 
+          {documentError && <div className="error-banner">{documentError}</div>}
           <div className="table-wrap">
             {documents.length === 0 ? (
               <div className="empty-state">No files uploaded yet.</div>
@@ -419,18 +440,27 @@ export default function ClientDetail() {
                     <tr key={d._id}>
                       <td>{d.originalName}</td>
                       <td>
-                        <span className="badge">{d.category === 'bill' ? 'Bill' : 'Document'}</span>
+                        <span className="badge">{d.category === 'bill' ? 'Invoice' : 'Document'}</span>
                       </td>
                       <td>
                         {formatDate(d.createdAt)} · {d.uploadedBy?.name}
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button className="btn btn-sm" onClick={() => handleDownload(d)}>
-                          Download
-                        </button>{' '}
-                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteDocument(d._id)}>
-                          Delete
-                        </button>
+                        <div className="row-actions">
+                          {canPreview(d.mimeType) && (
+                            <button className="btn btn-sm" onClick={() => handlePreview(d)}>
+                              Preview
+                            </button>
+                          )}
+                          <button className="btn btn-sm" onClick={() => handleDownload(d)}>
+                            Download
+                          </button>
+                          {!d.invoiceNumber && (
+                            <button className="btn btn-sm btn-danger" onClick={() => handleDeleteDocument(d._id)}>
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -440,6 +470,8 @@ export default function ClientDetail() {
           </div>
         </div>
       )}
+
+      {preview && <FilePreviewModal {...preview} onClose={closePreview} />}
 
       {showAssignmentForm && (
         <NewAssignmentModal

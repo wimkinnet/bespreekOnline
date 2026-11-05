@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
 import { formatEUR, formatDate } from '../utils/format';
+import FilePreviewModal from '../components/FilePreviewModal';
 
 export default function Invoices() {
   const [invoices, setInvoices] = useState([]);
@@ -37,7 +38,7 @@ export default function Invoices() {
     URL.revokeObjectURL(objectUrl);
   }
 
-  // Gives the invoice its number, stores the PDF with the client's bills and marks its time logs as invoiced
+  // Gives the invoice its number, stores the PDF with the client's invoices and marks its time logs as invoiced
   async function createInvoice(invoice) {
     const { client, entries, totalInclVat } = invoice;
     const brand = brands[client._id] || 'bespreek';
@@ -45,7 +46,7 @@ export default function Invoices() {
       `Create the invoice to ${client.name}?\n\n` +
         `${entries} time log${entries === 1 ? '' : 's'}, ${formatEUR(totalInclVat)} incl. VAT\n` +
         `PDF as: ${brand === 'catalista' ? 'Catalista' : 'bespreek'}\n\n` +
-        'It gets the next invoice number and is stored under Documents & bills of this client. These logs become invoiced. The app cannot undo this.\n\n' +
+        'It gets the next invoice number and is stored under Documents & invoices of this client. These logs become invoiced. The app cannot undo this.\n\n' +
         'The app does not send anything: you mail the PDF yourself.'
     );
     if (!ok) return;
@@ -294,27 +295,7 @@ export default function Invoices() {
         )}
       </div>
 
-      {preview && (
-        <div className="modal-backdrop" onClick={closePreview}>
-          <div className="modal pdf-preview" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{preview.title}</h2>
-              <div className="row-actions">
-                <a className="btn btn-sm" href={preview.url} download={preview.fileName}>
-                  Download
-                </a>
-                <a className="btn btn-sm" href={preview.url} target="_blank" rel="noreferrer">
-                  Open in new tab
-                </a>
-                <button className="btn btn-sm" onClick={closePreview}>
-                  Close
-                </button>
-              </div>
-            </div>
-            <iframe title={preview.title} src={preview.url} />
-          </div>
-        </div>
-      )}
+      {preview && <FilePreviewModal {...preview} mimeType="application/pdf" onClose={closePreview} />}
     </div>
   );
 }

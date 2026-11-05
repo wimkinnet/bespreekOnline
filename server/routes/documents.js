@@ -13,6 +13,14 @@ function canSeeBill(doc, user) {
   return user.role === 'admin' || (doc.uploadedBy && doc.uploadedBy.toString() === user._id.toString());
 }
 
+// Where a stored file is. Uploads used to send the file before the client, which put them in 'unfiled'.
+function storedFilePath(doc) {
+  const inClientFolder = path.join(UPLOAD_ROOT, doc.client.toString(), doc.storedFileName);
+  if (fs.existsSync(inClientFolder)) return inClientFolder;
+  const unfiled = path.join(UPLOAD_ROOT, 'unfiled', doc.storedFileName);
+  return fs.existsSync(unfiled) ? unfiled : null;
+}
+
 // GET /api/documents?client=&assignment=&category=
 router.get('/', async (req, res) => {
   try {
@@ -72,8 +80,8 @@ router.get('/:id/download', async (req, res) => {
       return res.send(doc.pdf);
     }
 
-    const filePath = path.join(UPLOAD_ROOT, doc.client.toString(), doc.storedFileName);
-    if (!fs.existsSync(filePath)) {
+    const filePath = storedFilePath(doc);
+    if (!filePath) {
       return res.status(404).json({ message: 'File is missing from storage.' });
     }
     res.download(filePath, doc.originalName);
@@ -96,8 +104,8 @@ router.delete('/:id', async (req, res) => {
       return res.status(400).json({ message: 'A created invoice cannot be deleted.' });
     }
 
-    const filePath = path.join(UPLOAD_ROOT, doc.client.toString(), doc.storedFileName);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    const filePath = storedFilePath(doc);
+    if (filePath) fs.unlinkSync(filePath);
 
     await doc.deleteOne();
     res.json({ message: 'Document deleted.' });

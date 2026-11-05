@@ -37,7 +37,7 @@ bespreekOnline/
   hours or days (whichever the assignment's billing type calls for).
   Fixed-fee assignments can still log days for internal tracking, but the
   billed amount lives on the assignment itself, not on each entry.
-- **Documents & bills** are uploaded per client, optionally linked to a
+- **Documents & invoices** are uploaded per client, optionally linked to a
   specific assignment, and categorized as "document" or "bill". Files are
   stored on disk under `UPLOAD_DIR/<clientId>/...` — see the storage note
   below before deploying.

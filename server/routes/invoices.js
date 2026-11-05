@@ -121,7 +121,7 @@ router.get('/:clientId/pdf', async (req, res) => {
 });
 
 // POST /api/invoices/:clientId/create { brand, entries } - gives the invoice the next number, stores the PDF with the
-// client's bills and marks exactly the entries on it as invoiced. `entries` is the count the user confirmed.
+// client's invoices and marks exactly the entries on it as invoiced. `entries` is the count the user confirmed.
 router.post('/:clientId/create', async (req, res) => {
   let issued;
   let storedDocument;
