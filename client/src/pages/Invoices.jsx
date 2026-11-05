@@ -87,6 +87,40 @@ export default function Invoices() {
     }
   }
 
+  // Today as yyyy-mm-dd on this computer
+  function todayIso() {
+    return new Intl.DateTimeFormat('en-CA').format(new Date());
+  }
+
+  async function setPaid(invoice, paidAt) {
+    setError('');
+    try {
+      await api.put(`/invoices/created/${invoice._id}/paid`, { paidAt });
+      await load();
+    } catch (err) {
+      setError(`Invoice ${invoice.invoiceNumber}: ${err.response?.data?.message || 'Could not save the payment.'}`);
+    }
+  }
+
+  function markPaid(invoice) {
+    const paidAt = window.prompt(`Invoice ${invoice.invoiceNumber} to ${invoice.client?.name} was paid on (yyyy-mm-dd):`, todayIso());
+    if (paidAt) setPaid(invoice, paidAt.trim());
+  }
+
+  function markUnpaid(invoice) {
+    if (window.confirm(`Set invoice ${invoice.invoiceNumber} back to unpaid?`)) setPaid(invoice, null);
+  }
+
+  function paymentStatus(invoice) {
+    if (invoice.paidAt) return { label: `Paid ${formatDate(invoice.paidAt)}`, className: 'invoice-paid' };
+    if (todayIso() > invoice.dueDate.slice(0, 10)) return { label: `Overdue since ${formatDate(invoice.dueDate)}`, className: 'invoice-overdue' };
+    return { label: `Due ${formatDate(invoice.dueDate)}`, className: 'invoice-open' };
+  }
+
+  const unpaid = created.filter((i) => !i.paidAt);
+  const overdue = unpaid.filter((i) => paymentStatus(i).className === 'invoice-overdue');
+  const sumIncl = (list) => list.reduce((total, i) => total + i.totalInclVat, 0);
+
   async function downloadCreated(invoice) {
     setError('');
     try {
@@ -167,7 +201,13 @@ export default function Invoices() {
         )}
       </div>
 
-      <h2 style={{ margin: '24px 0 10px' }}>Created invoices</h2>
+      <h2 style={{ margin: '24px 0 4px' }}>Created invoices</h2>
+      {created.length > 0 && (
+        <p className="muted" style={{ marginBottom: 10 }}>
+          Unpaid: {formatEUR(sumIncl(unpaid))} incl. VAT in {unpaid.length} invoice{unpaid.length === 1 ? '' : 's'}
+          {overdue.length > 0 && `, of which ${formatEUR(sumIncl(overdue))} overdue`}
+        </p>
+      )}
       <div className="table-wrap" style={{ overflowX: 'auto' }}>
         {loading ? (
           <div className="empty-state">Loading…</div>
@@ -184,6 +224,7 @@ export default function Invoices() {
                 <th>Total excl. VAT</th>
                 <th>VAT</th>
                 <th>Total incl. VAT</th>
+                <th>Payment</th>
                 <th></th>
               </tr>
             </thead>
@@ -199,10 +240,24 @@ export default function Invoices() {
                   <td>{formatEUR(i.totalExclVat)}</td>
                   <td>{i.client?.vatExempt ? <span className="muted">No VAT</span> : formatEUR(i.vatAmount)}</td>
                   <td>{formatEUR(i.totalInclVat)}</td>
+                  <td>
+                    <span className={`badge ${paymentStatus(i).className}`}>{paymentStatus(i).label}</span>
+                  </td>
                   <td style={{ textAlign: 'right' }}>
-                    <button className="btn btn-sm" onClick={() => downloadCreated(i)}>
-                      Download
-                    </button>
+                    <div className="row-actions">
+                      {i.paidAt ? (
+                        <button className="btn btn-sm" onClick={() => markUnpaid(i)}>
+                          Mark unpaid
+                        </button>
+                      ) : (
+                        <button className="btn btn-sm btn-primary" onClick={() => markPaid(i)}>
+                          Mark paid
+                        </button>
+                      )}
+                      <button className="btn btn-sm" onClick={() => downloadCreated(i)}>
+                        Download
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

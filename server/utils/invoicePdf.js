@@ -220,4 +220,4 @@ function renderInvoiceBuffer(invoice) {
   });
 }
 
-module.exports = { renderInvoicePdf, renderInvoiceBuffer };
+module.exports = { renderInvoicePdf, renderInvoiceBuffer, PAYMENT_TERM_DAYS };

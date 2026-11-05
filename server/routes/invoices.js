@@ -7,7 +7,7 @@ const Setting = require('../models/Setting');
 const { protect, requireRole } = require('../middleware/auth');
 const onfact = require('../utils/onfact');
 const { invoiceTotals, openInvoices, pdfDetails } = require('../utils/invoiceData');
-const { renderInvoicePdf, renderInvoiceBuffer } = require('../utils/invoicePdf');
+const { renderInvoicePdf, renderInvoiceBuffer, PAYMENT_TERM_DAYS } = require('../utils/invoicePdf');
 
 router.use(protect, requireRole('admin'));
 
@@ -49,6 +49,12 @@ router.get('/open', async (req, res) => {
   }
 });
 
+// The invoice date is the day it was created in Belgium; the due date follows from the payment term
+function dueDate(createdAt) {
+  const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(createdAt);
+  return new Date(new Date(`${iso}T00:00:00Z`).getTime() + PAYMENT_TERM_DAYS * 24 * 60 * 60 * 1000);
+}
+
 // GET /api/invoices/created - the invoices made so far, newest number first
 router.get('/created', async (req, res) => {
   try {
@@ -64,12 +70,36 @@ router.get('/created', async (req, res) => {
         invoiceNumber: d.invoiceNumber,
         originalName: d.originalName,
         createdAt: d.createdAt,
+        dueDate: dueDate(d.createdAt),
+        paidAt: d.paidAt,
         client: d.client,
         ...invoiceTotals(entries.filter((e) => e.invoiceNumber === d.invoiceNumber), d.client?.vatExempt),
       }))
     );
   } catch (err) {
     res.status(500).json({ message: 'Could not load the invoices.', error: err.message });
+  }
+});
+
+// PUT /api/invoices/created/:id/paid { paidAt: 'yyyy-mm-dd' | null } - marks an invoice as paid on that day, or open again
+router.put('/created/:id/paid', async (req, res) => {
+  try {
+    const { paidAt } = req.body;
+    let value = null;
+    if (paidAt !== null) {
+      value = /^\d{4}-\d{2}-\d{2}$/.test(String(paidAt)) ? new Date(`${paidAt}T00:00:00Z`) : null;
+      if (!value || Number.isNaN(value.getTime())) return res.status(400).json({ message: 'Enter the payment date as yyyy-mm-dd.' });
+      if (value > new Date()) return res.status(400).json({ message: 'The payment date cannot be in the future.' });
+    }
+    const doc = await Document.findOneAndUpdate(
+      { _id: req.params.id, invoiceNumber: { $exists: true } },
+      { $set: { paidAt: value } },
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ message: 'Invoice not found.' });
+    res.json({ invoiceNumber: doc.invoiceNumber, paidAt: doc.paidAt });
+  } catch (err) {
+    res.status(500).json({ message: 'Could not save the payment.', error: err.message });
   }
 });
 

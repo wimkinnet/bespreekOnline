@@ -14,6 +14,7 @@ const documentSchema = new mongoose.Schema(
     // A created invoice: its number, and the PDF itself so the record does not depend on the server's disk
     invoiceNumber: { type: String },
     pdf: { type: Buffer, select: false },
+    paidAt: { type: Date, default: null }, // set by hand on the Invoices tab
   },
   { timestamps: true }
 );

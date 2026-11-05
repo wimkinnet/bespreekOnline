@@ -257,6 +257,28 @@ textarea {
   white-space: nowrap;
 }
 
+.badge.invoice-paid,
+.badge.invoice-open,
+.badge.invoice-overdue {
+  white-space: nowrap;
+}
+
+.badge.invoice-paid {
+  background: var(--accent-tint);
+  color: var(--accent-dark);
+}
+
+.badge.invoice-open {
+  background: var(--paper);
+  color: var(--ink-soft);
+  border: 1px solid var(--border);
+}
+
+.badge.invoice-overdue {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
 .invoice-actions {
   display: inline-grid;
   grid-template-columns: 1fr auto;
