@@ -37,8 +37,9 @@ const INVOICING = {
 
 // Optional clauses in the order they are printed; `name` is who the proposal is from
 const CLAUSES = {
+  // The processor's main duties under article 28 GDPR, so the proposal itself carries them
   gdpr: (name) =>
-    `${name} verwerkt persoonsgegevens, zoals leerlingengegevens, uitsluitend in opdracht van de opdrachtgever en volgens een afzonderlijke verwerkersovereenkomst conform de GDPR`,
+    `Voor zover ${name} bij deze opdracht persoonsgegevens verwerkt, zoals leerlingengegevens, treedt zij op als verwerker in de zin van artikel 28 van de AVG (GDPR). Zij verwerkt die gegevens uitsluitend volgens de instructies van de opdrachtgever en enkel voor deze opdracht, legt wie ermee werkt geheimhouding op, neemt passende beveiligingsmaatregelen, schakelt geen andere verwerkers in zonder voorafgaand akkoord, helpt de opdrachtgever bij verzoeken van betrokkenen en meldt een datalek onverwijld. Na afloop van de opdracht worden de gegevens verwijderd of terugbezorgd`,
   cancellation: () =>
     'Bij annulering of verplaatsing van een begeleidingsmoment minder dan 10 werkdagen vooraf wordt 50% van dat moment aangerekend, minder dan 2 werkdagen vooraf 100%',
   validity: () => 'Deze offerte is 60 dagen geldig vanaf de offertedatum',
@@ -213,6 +214,13 @@ function renderProposalPdf(proposal, stream) {
       .map(([, text]) => text(from, proposal.company)),
   ];
   for (const b of bullets) {
+    // A bullet that would run into the footer starts on a new page
+    doc.font('Helvetica').fontSize(11.5);
+    if (y + doc.heightOfString(b, { width: width - 16, lineGap: 2 }) > H - 80) {
+      doc.addPage();
+      doc.rect(W - 18, 0, 18, H).fill(brand.accent);
+      y = 60;
+    }
     doc.circle(left + 4, y + 6, 2.5).fill(brand.main);
     doc.font('Helvetica').fontSize(11.5).fillColor(INK).text(b, left + 16, y, { width: width - 16, lineGap: 2 });
     y = doc.y + 10;

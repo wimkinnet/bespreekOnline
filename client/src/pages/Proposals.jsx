@@ -73,7 +73,7 @@ const EXAMPLE = {
 // The clauses that can be switched on or off; the full Dutch text is in the PDF
 const CLAUSE_OPTIONS = [
   ['clientCosts', 'Practical organisation, copies, catering and rooms are paid by the client'],
-  ['gdpr', 'Personal data only under a separate data processing agreement (GDPR)'],
+  ['gdpr', 'Personal data: we act as processor under article 28 GDPR, with its main duties'],
   ['cancellation', 'Cancelling: 50% under 10 working days, 100% under 2 working days'],
   ['validity', 'The proposal is valid for 60 days'],
   ['latePayment', 'Statutory interest and fixed compensation for late payment'],
