@@ -15,6 +15,7 @@ const distanceRoutes = require('./routes/distance');
 const settingsRoutes = require('./routes/settings');
 const travelClaimRoutes = require('./routes/travelClaims');
 const invoiceRoutes = require('./routes/invoices');
+const proposalRoutes = require('./routes/proposals');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/api/distance', distanceRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/travel-claims', travelClaimRoutes);
 app.use('/api/invoices', invoiceRoutes);
+app.use('/api/proposals', proposalRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

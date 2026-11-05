@@ -1,0 +1,574 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import api from '../api/axios';
+import { formatEUR, formatDate } from '../utils/format';
+import FilePreviewModal from '../components/FilePreviewModal';
+
+const STATUS_LABELS = { draft: 'Draft', sent: 'Sent', accepted: 'Accepted', declined: 'Declined' };
+const STATUS_BADGES = { draft: 'invoice-open', sent: 'status-on_hold', accepted: 'invoice-paid', declined: 'status-cancelled' };
+const DAY_OPTIONS = Array.from({ length: 40 }, (_, i) => (i + 1) / 4); // 0.25 to 10 days
+const INVOICING_OPTIONS = [
+  ['monthly', 'Monthly, for the day parts done'],
+  ['per_step', 'After each completed step'],
+  ['end', 'At the end of the assignment'],
+];
+const ASSIGNMENT_OPTIONS = [
+  ['none', "Don't create assignments"],
+  ['single', 'One assignment for the whole proposal'],
+  ['per_step', 'One assignment per step'],
+];
+
+const today = () => new Intl.DateTimeFormat('en-CA').format(new Date());
+
+function emptyProposal() {
+  return {
+    client: '',
+    title: '',
+    date: today(),
+    brand: 'catalista',
+    status: 'draft',
+    consultants: [],
+    introduction: '',
+    goal: '',
+    steps: [{ title: '', description: '', proposedDates: '', days: 0.5 }],
+    requirements: '',
+    supportDays: 0,
+    supportLabel: 'Ondersteunend werk in voorbereiding of verwerking van de begeleidingsdagen',
+    dayRate: 950,
+    conditions: { travelRate: 0.45, invoicing: 'monthly', paymentTermDays: 30, clientCosts: true },
+    assignmentMode: 'none',
+  };
+}
+
+// The stored proposal as form values
+function toForm(p) {
+  return {
+    ...emptyProposal(),
+    ...p,
+    client: p.client?._id || p.client,
+    date: String(p.date).slice(0, 10),
+    consultants: (p.consultants || []).map(String),
+    conditions: { ...emptyProposal().conditions, ...p.conditions },
+  };
+}
+
+function totals(form) {
+  const days = form.steps.reduce((s, step) => s + Number(step.days || 0), 0) + Number(form.supportDays || 0);
+  return { days, amount: days * Number(form.dayRate || 0) };
+}
+
+// The dialog in which a proposal is written, previewed and saved
+function ProposalEditor({ initial, clients, users, onClose, onSaved }) {
+  const [form, setForm] = useState(() => (initial ? toForm(initial) : emptyProposal()));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [preview, setPreview] = useState(null);
+  const locked = (initial?.createdAssignments || []).length > 0;
+  const set = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+  const setCondition = (field, value) => setForm((f) => ({ ...f, conditions: { ...f.conditions, [field]: value } }));
+  const setStep = (i, field, value) =>
+    setForm((f) => ({ ...f, steps: f.steps.map((s, j) => (j === i ? { ...s, [field]: value } : s)) }));
+  const moveStep = (i, delta) =>
+    setForm((f) => {
+      const steps = [...f.steps];
+      [steps[i], steps[i + delta]] = [steps[i + delta], steps[i]];
+      return { ...f, steps };
+    });
+  const toggleConsultant = (id) =>
+    set('consultants', form.consultants.includes(id) ? form.consultants.filter((c) => c !== id) : [...form.consultants, id]);
+  const { days, amount } = totals(form);
+
+  async function showPreview() {
+    setError('');
+    try {
+      const res = await api.post('/proposals/preview', { ...form, number: initial?.number }, { responseType: 'blob' });
+      setPreview({
+        title: `Offerte ${initial?.number || '(concept)'}`,
+        url: URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' })),
+        fileName: `offerte_${initial?.number || 'concept'}.pdf`,
+      });
+    } catch (err) {
+      const text = await err.response?.data?.text?.();
+      let message = 'Could not create the preview.';
+      try {
+        message = JSON.parse(text).message || message;
+      } catch {
+        // keep the general message
+      }
+      setError(message);
+    }
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    if (
+      form.status === 'accepted' &&
+      initial?.status !== 'accepted' &&
+      form.assignmentMode !== 'none' &&
+      !locked &&
+      !window.confirm(
+        form.assignmentMode === 'single'
+          ? 'Accepting creates one assignment for this proposal. Continue?'
+          : `Accepting creates ${form.steps.length + (Number(form.supportDays) > 0 ? 1 : 0)} assignments, one per step. Continue?`
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const payload = { ...form, steps: form.steps.filter((s) => s.title.trim()) };
+      const { data } = initial ? await api.put(`/proposals/${initial._id}`, payload) : await api.post('/proposals', payload);
+      onSaved(data.assignmentsCreated || 0);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not save the proposal.');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal modal-wide proposal-editor">
+        <div className="modal-header">
+          <div>
+            <h2>{initial ? `Proposal ${initial.number}` : 'New proposal'}</h2>
+            <p className="muted" style={{ margin: 0 }}>
+              {num(days)} days · {formatEUR(amount)} excl. VAT
+            </p>
+          </div>
+          <button className="btn btn-sm" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        {error && <div className="error-banner">{error}</div>}
+        <form onSubmit={save}>
+          <div className="field-row">
+            <div className="field">
+              <label>Client</label>
+              <select required value={form.client} onChange={(e) => set('client', e.target.value)}>
+                <option value="">Choose a client</option>
+                {clients.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Date</label>
+              <input type="date" required value={form.date} onChange={(e) => set('date', e.target.value)} />
+            </div>
+          </div>
+          <div className="field">
+            <label>Title</label>
+            <input
+              required
+              placeholder="Opzet kwaliteitszorgsysteem voor …"
+              value={form.title}
+              onChange={(e) => set('title', e.target.value)}
+            />
+          </div>
+          <div className="field-row">
+            <div className="field">
+              <label>Brand</label>
+              <select value={form.brand} onChange={(e) => set('brand', e.target.value)}>
+                <option value="catalista">Catalista</option>
+                <option value="bespreek">bespreek</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Status</label>
+              <select value={form.status} onChange={(e) => set('status', e.target.value)}>
+                {Object.entries(STATUS_LABELS).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <h3>Consultants</h3>
+          <div className="proposal-chips">
+            {users.map((u) => (
+              <label key={u.id} className={'proposal-chip' + (form.consultants.includes(u.id) ? ' on' : '')}>
+                <input type="checkbox" checked={form.consultants.includes(u.id)} onChange={() => toggleConsultant(u.id)} />
+                {u.name}
+                {!u.bio && <span className="muted"> (no profile yet)</span>}
+              </label>
+            ))}
+          </div>
+
+          <h3>Situation</h3>
+          <div className="field">
+            <label>Aanleiding</label>
+            <textarea rows={4} value={form.introduction} onChange={(e) => set('introduction', e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Doelstelling</label>
+            <textarea rows={3} value={form.goal} onChange={(e) => set('goal', e.target.value)} />
+          </div>
+
+          <h3>Plan of approach</h3>
+          {form.steps.map((step, i) => (
+            <div key={i} className="proposal-step">
+              <div className="proposal-step-head">
+                <strong>Stap {i + 1}</strong>
+                <div className="row-actions">
+                  <button type="button" className="btn btn-sm" disabled={i === 0} onClick={() => moveStep(i, -1)} aria-label="Move up">
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={i === form.steps.length - 1}
+                    onClick={() => moveStep(i, 1)}
+                    aria-label="Move down"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    disabled={form.steps.length === 1}
+                    onClick={() => set('steps', form.steps.filter((_, j) => j !== i))}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+              <div className="field-row" style={{ gridTemplateColumns: '3fr 1fr' }}>
+                <div className="field">
+                  <label>Title</label>
+                  <input value={step.title} onChange={(e) => setStep(i, 'title', e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>Days</label>
+                  <select value={step.days} onChange={(e) => setStep(i, 'days', Number(e.target.value))}>
+                    {DAY_OPTIONS.map((d) => (
+                      <option key={d} value={d}>
+                        {num(d)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="field">
+                <label>Description</label>
+                <textarea rows={3} value={step.description} onChange={(e) => setStep(i, 'description', e.target.value)} />
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
+                <label>Proposed dates</label>
+                <input
+                  placeholder="28/09 voormiddag"
+                  value={step.proposedDates}
+                  onChange={(e) => setStep(i, 'proposedDates', e.target.value)}
+                />
+              </div>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="btn btn-sm"
+            style={{ marginBottom: 14 }}
+            onClick={() => set('steps', [...form.steps, { title: '', description: '', proposedDates: '', days: 0.5 }])}
+          >
+            + Add step
+          </button>
+          <div className="field">
+            <label>What the client provides</label>
+            <textarea
+              rows={2}
+              placeholder="Voor stap 1 is toegang nodig tot de kerndocumenten en de databronnen van de school."
+              value={form.requirements}
+              onChange={(e) => set('requirements', e.target.value)}
+            />
+          </div>
+
+          <h3>Budget</h3>
+          <div className="field-row" style={{ gridTemplateColumns: '3fr 1fr' }}>
+            <div className="field">
+              <label>Supporting work (without the client)</label>
+              <input value={form.supportLabel} onChange={(e) => set('supportLabel', e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Days</label>
+              <select value={form.supportDays} onChange={(e) => set('supportDays', Number(e.target.value))}>
+                <option value={0}>None</option>
+                {DAY_OPTIONS.map((d) => (
+                  <option key={d} value={d}>
+                    {num(d)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="field-row">
+            <div className="field">
+              <label>Day rate (€, excl. VAT)</label>
+              <input type="number" min="0" step="5" value={form.dayRate} onChange={(e) => set('dayRate', Number(e.target.value))} />
+            </div>
+            <div className="field">
+              <label>Travel (€ per km)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.conditions.travelRate}
+                onChange={(e) => setCondition('travelRate', Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          <h3>Conditions</h3>
+          <div className="field-row">
+            <div className="field">
+              <label>Invoicing</label>
+              <select value={form.conditions.invoicing} onChange={(e) => setCondition('invoicing', e.target.value)}>
+                {INVOICING_OPTIONS.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Payment term</label>
+              <select
+                value={form.conditions.paymentTermDays}
+                onChange={(e) => setCondition('paymentTermDays', Number(e.target.value))}
+              >
+                {[14, 30, 45, 60].map((d) => (
+                  <option key={d} value={d}>
+                    {d} days
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <label className="checkbox-row" style={{ marginBottom: 14 }}>
+            <input
+              type="checkbox"
+              checked={form.conditions.clientCosts}
+              onChange={(e) => setCondition('clientCosts', e.target.checked)}
+            />
+            Practical organisation, copies, catering and rooms are paid by the client
+          </label>
+
+          <h3>When accepted</h3>
+          <div className="field">
+            <select value={form.assignmentMode} disabled={locked} onChange={(e) => set('assignmentMode', e.target.value)}>
+              {ASSIGNMENT_OPTIONS.map(([v, l]) => (
+                <option key={v} value={v}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            {locked ? (
+              <p className="muted" style={{ marginTop: 6 }}>
+                Created:{' '}
+                {initial.createdAssignments.map((a, i) => (
+                  <span key={a._id}>
+                    {i > 0 && ', '}
+                    <Link to={`/assignments/${a._id}`}>{a.title}</Link>
+                  </span>
+                ))}
+              </p>
+            ) : (
+              <p className="muted" style={{ marginTop: 6 }}>
+                Assignments are created once, when the status is set to Accepted, billed per day at the day rate with the
+                chosen consultants.
+              </p>
+            )}
+          </div>
+
+          <div className="row-actions">
+            <button className="btn btn-primary" type="submit" disabled={saving}>
+              {saving ? 'Saving…' : 'Save proposal'}
+            </button>
+            <button type="button" className="btn" onClick={showPreview}>
+              Preview
+            </button>
+            <button type="button" className="btn" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+      {preview && (
+        <FilePreviewModal
+          {...preview}
+          mimeType="application/pdf"
+          onClose={() => {
+            URL.revokeObjectURL(preview.url);
+            setPreview(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const num = (n) => new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 }).format(n);
+
+export default function Proposals() {
+  const [proposals, setProposals] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null); // null, 'new' or the proposal being edited
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [preview, setPreview] = useState(null);
+
+  async function load() {
+    const [p, c, u] = await Promise.all([api.get('/proposals'), api.get('/clients'), api.get('/users')]);
+    setProposals(p.data);
+    setClients(c.data);
+    setUsers(u.data.filter((x) => x.active));
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load().catch(() => setError('Could not load the proposals.'));
+  }, []);
+
+  async function openEditor(proposal) {
+    setMessage('');
+    if (!proposal) return setEditing('new');
+    const { data } = await api.get(`/proposals/${proposal._id}`);
+    setEditing(data);
+  }
+
+  async function showPdf(p, download) {
+    setError('');
+    try {
+      const res = await api.get(`/proposals/${p._id}/pdf`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const fileName = `offerte_${p.number}_${(p.client?.name || '').replace(/[^\w-]+/g, '_')}.pdf`;
+      if (!download) return setPreview({ title: `Offerte ${p.number} · ${p.client?.name}`, url, fileName });
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError(`Could not create the PDF of ${p.number}.`);
+    }
+  }
+
+  async function remove(p) {
+    if (!window.confirm(`Delete proposal ${p.number}?`)) return;
+    setError('');
+    try {
+      await api.delete(`/proposals/${p._id}`);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not delete the proposal.');
+    }
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <h1>Proposals</h1>
+          <p>Offertes to clients. An accepted proposal can create its assignments.</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => openEditor(null)}>
+          + New proposal
+        </button>
+      </div>
+
+      {message && <div className="success-banner">{message}</div>}
+      {error && <div className="error-banner">{error}</div>}
+
+      <div className="table-wrap" style={{ overflowX: 'auto' }}>
+        {loading ? (
+          <div className="empty-state">Loading…</div>
+        ) : proposals.length === 0 ? (
+          <div className="empty-state">No proposals yet.</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Proposal</th>
+                <th>Date</th>
+                <th>Client</th>
+                <th>Title</th>
+                <th>Days</th>
+                <th>Total excl. VAT</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {proposals.map((p) => (
+                <tr key={p._id}>
+                  <td>
+                    <strong>{p.number}</strong>
+                  </td>
+                  <td>{formatDate(p.date)}</td>
+                  <td>{p.client?.name}</td>
+                  <td>{p.title}</td>
+                  <td>{num(p.budget.days)}</td>
+                  <td>{formatEUR(p.budget.amount)}</td>
+                  <td>
+                    <span className={`badge ${STATUS_BADGES[p.status]}`}>{STATUS_LABELS[p.status]}</span>
+                    {p.createdAssignments?.length > 0 && (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        {p.createdAssignments.length} assignment{p.createdAssignments.length === 1 ? '' : 's'}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div className="row-actions">
+                      <button className="btn btn-sm btn-primary" onClick={() => openEditor(p)}>
+                        Edit
+                      </button>
+                      <button className="btn btn-sm" onClick={() => showPdf(p, false)}>
+                        Preview
+                      </button>
+                      <button className="btn btn-sm" onClick={() => showPdf(p, true)}>
+                        Download
+                      </button>
+                      {!p.createdAssignments?.length && (
+                        <button className="btn btn-sm btn-danger" onClick={() => remove(p)}>
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {editing && (
+        <ProposalEditor
+          initial={editing === 'new' ? null : editing}
+          clients={clients}
+          users={users}
+          onClose={() => setEditing(null)}
+          onSaved={(created) => {
+            setEditing(null);
+            setMessage(created ? `Proposal saved. ${created} assignment${created === 1 ? '' : 's'} created.` : 'Proposal saved.');
+            load();
+          }}
+        />
+      )}
+      {preview && (
+        <FilePreviewModal
+          {...preview}
+          mimeType="application/pdf"
+          onClose={() => {
+            URL.revokeObjectURL(preview.url);
+            setPreview(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}

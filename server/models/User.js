@@ -18,6 +18,11 @@ const userSchema = new mongoose.Schema(
       country: { type: String, default: 'Belgium' },
     },
     iban: { type: String, trim: true }, // bank account for reimbursing expense claims
+    // Shown on the team page of proposals
+    jobTitle: { type: String, trim: true },
+    bio: { type: String, trim: true },
+    photo: { type: Buffer, select: false }, // jpeg or png, loaded only where it is shown
+    photoType: { type: String },
   },
   { timestamps: true }
 );
@@ -43,6 +48,9 @@ userSchema.methods.toSafeObject = function () {
     phone: this.phone,
     homeAddress: this.homeAddress,
     iban: this.iban,
+    jobTitle: this.jobTitle,
+    bio: this.bio,
+    hasPhoto: Boolean(this.photoType),
     createdAt: this.createdAt,
   };
 };

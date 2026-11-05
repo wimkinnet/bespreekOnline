@@ -13,6 +13,7 @@ import Calendar from './pages/Calendar';
 import Consultants from './pages/Consultants';
 import Reports from './pages/Reports';
 import Invoices from './pages/Invoices';
+import Proposals from './pages/Proposals';
 
 export default function App() {
   return (
@@ -39,6 +40,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <Reports />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="proposals"
+            element={
+              <AdminRoute>
+                <Proposals />
               </AdminRoute>
             }
           />

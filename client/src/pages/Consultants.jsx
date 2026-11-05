@@ -85,7 +85,48 @@ export default function Consultants() {
     }
   }
 
+  // The photo of the account being edited, as an object URL, or null without one
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  async function loadPhoto(u) {
+    setPhotoUrl((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return null;
+    });
+    if (!u.hasPhoto) return;
+    const res = await api.get(`/users/${u.id}/photo`, { responseType: 'blob' });
+    setPhotoUrl(URL.createObjectURL(res.data));
+  }
+
+  async function changePhoto(file) {
+    if (!file) return;
+    setPhotoBusy(true);
+    setEditError('');
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+      const { data } = await api.put(`/users/${editUser.id}/photo`, formData);
+      setEditUser(data);
+      await loadPhoto(data);
+      load();
+    } catch (err) {
+      setEditError(err.response?.data?.message || 'Could not save the photo.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function removePhoto() {
+    if (!window.confirm(`Remove the photo of ${editUser.name}?`)) return;
+    const { data } = await api.delete(`/users/${editUser.id}/photo`);
+    setEditUser(data);
+    await loadPhoto(data);
+    load();
+  }
+
   function openEdit(u) {
+    loadPhoto(u).catch(() => setPhotoUrl(null));
     setEditUser(u);
     setEditError('');
     setEditForm({
@@ -95,6 +136,8 @@ export default function Consultants() {
       street: u.homeAddress?.street || '',
       postalCode: u.homeAddress?.postalCode || '',
       city: u.homeAddress?.city || '',
+      jobTitle: u.jobTitle || '',
+      bio: u.bio || '',
     });
   }
 
@@ -108,6 +151,8 @@ export default function Consultants() {
         role: editForm.role,
         phone: editForm.phone,
         homeAddress: homeAddressPayload(editForm),
+        jobTitle: editForm.jobTitle,
+        bio: editForm.bio,
       });
       setEditUser(null);
       load();
@@ -268,6 +313,41 @@ export default function Consultants() {
                 </div>
               </div>
               <HomeAddressFields form={editForm} setForm={setEditForm} />
+              <div className="field">
+                <label>Job title on proposals</label>
+                <input
+                  placeholder="Begeleider"
+                  value={editForm.jobTitle}
+                  onChange={(e) => setEditForm({ ...editForm, jobTitle: e.target.value })}
+                />
+              </div>
+              <div className="field">
+                <label>Photo on proposals</label>
+                <div className="consultant-photo">
+                  {photoUrl ? <img src={photoUrl} alt={editUser.name} /> : <span className="muted">No photo yet</span>}
+                  <div className="row-actions">
+                    <label className="btn btn-sm" style={{ margin: 0 }}>
+                      {photoBusy ? 'Saving…' : editUser.hasPhoto ? 'Replace photo' : 'Add photo'}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        hidden
+                        disabled={photoBusy}
+                        onChange={(e) => changePhoto(e.target.files[0])}
+                      />
+                    </label>
+                    {editUser.hasPhoto && (
+                      <button type="button" className="btn btn-sm btn-danger" onClick={removePhoto}>
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="field">
+                <label>Profile on proposals</label>
+                <textarea rows={6} value={editForm.bio} onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })} />
+              </div>
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {saving ? 'Saving…' : 'Save changes'}
               </button>

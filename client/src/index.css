@@ -385,6 +385,74 @@ textarea {
   color: var(--ink-soft);
 }
 
+/* ---------- Proposals ---------- */
+
+.consultant-photo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.consultant-photo img {
+  width: 72px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.proposal-editor {
+  max-width: 820px;
+}
+
+.proposal-editor h3 {
+  margin: 18px 0 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.proposal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.proposal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.proposal-chip input {
+  width: auto;
+}
+
+.proposal-chip.on {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.proposal-step {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background: var(--paper);
+}
+
+.proposal-step-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
 /* ---------- Dashboard ---------- */
 
 .dash-stat-link {
