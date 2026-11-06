@@ -8,7 +8,9 @@ const { upload, UPLOAD_ROOT } = require('../middleware/upload');
 
 router.use(protect);
 
-// Bills and invoices are for admins; a consultant only sees the ones they uploaded themselves
+// Invoices and proposals are for admins; a consultant only sees the ones they uploaded themselves
+const ADMIN_ONLY = ['bill', 'proposal'];
+
 function canSeeBill(doc, user) {
   return user.role === 'admin' || (doc.uploadedBy && doc.uploadedBy.toString() === user._id.toString());
 }
@@ -30,7 +32,7 @@ router.get('/', async (req, res) => {
     if (assignment) filter.assignment = assignment;
     if (category) filter.category = category;
     if (req.user.role !== 'admin') {
-      filter.$or = [{ category: { $ne: 'bill' } }, { uploadedBy: req.user._id }];
+      filter.$or = [{ category: { $nin: ADMIN_ONLY } }, { uploadedBy: req.user._id }];
     }
 
     const documents = await Document.find(filter)
@@ -71,7 +73,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 router.get('/:id/download', async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id).select('+pdf');
-    if (!doc || (doc.category === 'bill' && !canSeeBill(doc, req.user))) {
+    if (!doc || (ADMIN_ONLY.includes(doc.category) && !canSeeBill(doc, req.user))) {
       return res.status(404).json({ message: 'Document not found.' });
     }
     if (doc.pdf) {

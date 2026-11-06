@@ -4,7 +4,7 @@ const documentSchema = new mongoose.Schema(
   {
     client: { type: mongoose.Schema.Types.ObjectId, ref: 'Client', required: true },
     assignment: { type: mongoose.Schema.Types.ObjectId, ref: 'Assignment', default: null },
-    category: { type: String, enum: ['document', 'bill'], default: 'document' },
+    category: { type: String, enum: ['document', 'bill', 'proposal'], default: 'document' }, // bill = invoice
     originalName: { type: String, required: true },
     storedFileName: { type: String, required: true }, // name on disk
     mimeType: { type: String },

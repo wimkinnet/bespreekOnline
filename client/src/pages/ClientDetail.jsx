@@ -440,7 +440,7 @@ export default function ClientDetail() {
                     <tr key={d._id}>
                       <td>{d.originalName}</td>
                       <td>
-                        <span className="badge">{d.category === 'bill' ? 'Invoice' : 'Document'}</span>
+                        <span className="badge">{{ bill: 'Invoice', proposal: 'Proposal' }[d.category] || 'Document'}</span>
                       </td>
                       <td>
                         {formatDate(d.createdAt)} · {d.uploadedBy?.name}

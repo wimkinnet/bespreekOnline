@@ -1,4 +1,5 @@
 const path = require('path');
+const { PassThrough } = require('stream');
 const PDFDocument = require('pdfkit');
 
 // Renders a proposal (offerte) in Dutch as an A4 PDF: cover, situation, team, plan, budget and conditions.
@@ -242,4 +243,15 @@ function renderProposalPdf(proposal, stream) {
   doc.end();
 }
 
-module.exports = { renderProposalPdf };
+function renderProposalBuffer(proposal) {
+  return new Promise((resolve, reject) => {
+    const stream = new PassThrough();
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+    renderProposalPdf(proposal, stream);
+  });
+}
+
+module.exports = { renderProposalPdf, renderProposalBuffer };

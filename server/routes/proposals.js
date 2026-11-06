@@ -6,8 +6,9 @@ const Assignment = require('../models/Assignment');
 const Client = require('../models/Client');
 const Setting = require('../models/Setting');
 const User = require('../models/User');
+const Document = require('../models/Document');
 const { protect, requireRole } = require('../middleware/auth');
-const { renderProposalPdf } = require('../utils/proposalPdf');
+const { renderProposalPdf, renderProposalBuffer } = require('../utils/proposalPdf');
 
 router.use(protect, requireRole('admin'));
 
@@ -102,6 +103,25 @@ function sendPdf(res, data, fileName) {
 
 const fileName = (p, client) => `offerte_${p.number || 'concept'}_${(client?.name || '').replace(/[^\w-]+/g, '_')}.pdf`;
 
+// Keeps the PDF as sent with the client's documents; each time a proposal is set to Sent, its version then
+async function storeSentPdf(proposal, userId) {
+  const data = await pdfData(proposal.toObject());
+  const pdf = await renderProposalBuffer(data);
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date());
+  const doc = await Document.create({
+    client: proposal.client,
+    category: 'proposal',
+    originalName: fileName(proposal, data.client).replace(/\.pdf$/, `_${today}.pdf`),
+    storedFileName: `proposal-${proposal.number}-${Date.now()}.pdf`,
+    mimeType: 'application/pdf',
+    size: pdf.length,
+    uploadedBy: userId,
+    notes: `Proposal ${proposal.number}, sent on ${today}`,
+    pdf,
+  });
+  return doc.originalName;
+}
+
 // GET /api/proposals - newest first, with the totals
 router.get('/', async (req, res) => {
   try {
@@ -138,7 +158,8 @@ router.post('/preview', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const proposal = await Proposal.create({ ...pick(req.body), number: await nextProposalNumber(), createdBy: req.user._id });
-    res.status(201).json(proposal);
+    const storedDocument = proposal.status === 'sent' ? await storeSentPdf(proposal, req.user._id) : null;
+    res.status(201).json({ proposal, storedDocument });
   } catch (err) {
     res.status(400).json({ message: 'Could not save the proposal.', error: err.message });
   }
@@ -149,6 +170,7 @@ router.put('/:id', async (req, res) => {
   try {
     const proposal = await Proposal.findById(req.params.id);
     if (!proposal) return res.status(404).json({ message: 'Proposal not found.' });
+    const wasSent = proposal.status === 'sent';
     proposal.set(pick(req.body));
     let createdNow = [];
     if (proposal.status === 'accepted' && proposal.assignmentMode !== 'none' && proposal.createdAssignments.length === 0) {
@@ -157,8 +179,9 @@ router.put('/:id', async (req, res) => {
       proposal.createdAssignments = createdNow;
     }
     await proposal.save();
+    const storedDocument = proposal.status === 'sent' && !wasSent ? await storeSentPdf(proposal, req.user._id) : null;
     await proposal.populate('createdAssignments', 'title status');
-    res.json({ proposal, assignmentsCreated: createdNow.length });
+    res.json({ proposal, assignmentsCreated: createdNow.length, storedDocument });
   } catch (err) {
     res.status(400).json({ message: 'Could not save the proposal.', error: err.message });
   }

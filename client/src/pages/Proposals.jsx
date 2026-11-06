@@ -208,7 +208,7 @@ function ProposalEditor({ initial, source, proposals, clients, users, onClose, o
     try {
       const payload = { ...form, steps: form.steps.filter((s) => s.title.trim()) };
       const { data } = initial ? await api.put(`/proposals/${initial._id}`, payload) : await api.post('/proposals', payload);
-      onSaved(data.assignmentsCreated || 0);
+      onSaved(data.assignmentsCreated || 0, data.storedDocument);
     } catch (err) {
       setError(err.response?.data?.message || 'Could not save the proposal.');
       setSaving(false);
@@ -663,9 +663,17 @@ export default function Proposals() {
           clients={clients}
           users={users}
           onClose={() => setEditing(null)}
-          onSaved={(created) => {
+          onSaved={(created, storedDocument) => {
             setEditing(null);
-            setMessage(created ? `Proposal saved. ${created} assignment${created === 1 ? '' : 's'} created.` : 'Proposal saved.');
+            setMessage(
+              [
+                'Proposal saved.',
+                created && `${created} assignment${created === 1 ? '' : 's'} created.`,
+                storedDocument && `The PDF is stored with the client's documents as ${storedDocument}.`,
+              ]
+                .filter(Boolean)
+                .join(' ')
+            );
             load();
           }}
         />

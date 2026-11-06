@@ -338,7 +338,7 @@ export default function AssignmentDetail() {
               {documents.map((d) => (
                 <tr key={d._id}>
                   <td>{d.originalName}</td>
-                  <td>{d.category === 'bill' ? 'Invoice' : 'Document'}</td>
+                  <td>{{ bill: 'Invoice', proposal: 'Proposal' }[d.category] || 'Document'}</td>
                   <td>{formatDate(d.createdAt)}</td>
                 </tr>
               ))}
