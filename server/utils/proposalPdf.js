@@ -18,9 +18,9 @@ const BRANDS = {
     logo: asset('bespreek-logo.png'),
     wordmark: 'bespreek',
     tagline: null,
-    main: '#14302f',
+    main: '#00807d', // the app's teal for title bands and the cover, instead of near-black
     band: '#02c8c9',
-    accent: '#00807d',
+    accent: '#02c8c9',
     dark: '#00615f',
     line: (company) => company.name,
   },
