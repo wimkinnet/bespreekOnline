@@ -214,7 +214,8 @@ function renderProposalPdf(proposal, stream) {
       .filter(([key]) => (key === 'indexation' ? c[key] === true : c[key] !== false)) // indexation only when chosen
       .map(([, text]) => text(from, proposal.company)),
   ];
-  for (const b of bullets) {
+  for (const condition of bullets) {
+    const b = /[.!?]$/.test(condition) ? condition : `${condition}.`; // every condition ends as a sentence
     // A bullet that would run into the footer starts on a new page
     doc.font('Helvetica').fontSize(11.5);
     if (y + doc.heightOfString(b, { width: width - 16, lineGap: 2 }) > H - 80) {
