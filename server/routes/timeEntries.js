@@ -269,7 +269,15 @@ router.put('/:id', async (req, res) => {
     }
 
     const travelSent = [includeTravel, travelType, travelKm, travelRate, travelAmount, travelNote];
-    if (travelSent.some((v) => v !== undefined)) {
+    // Older entries have a km travel amount without the km behind it. Changing only the rate must not look the
+    // distance up again and replace that amount; it changes only when km are entered or the travel is removed.
+    const legacyTravel = entry.travelType !== 'other' && entry.travelAmount > 0 && !entry.travelKm;
+    const keepsLegacy =
+      legacyTravel &&
+      includeTravel !== false &&
+      (travelType === undefined || travelType === 'km') &&
+      (travelKm === undefined || travelKm === '' || travelKm === null);
+    if (travelSent.some((v) => v !== undefined) && !keepsLegacy) {
       const travel = await computeTravel(
         {
           includeTravel: includeTravel !== undefined ? includeTravel : entry.travelIncluded,
@@ -289,22 +297,6 @@ router.put('/:id', async (req, res) => {
     res.json({ ...entry.toObject(), assignmentFullyBilled: await fixedFeeFullyBilled(entry.assignment) });
   } catch (err) {
     if (err instanceof DistanceError) return res.status(422).json({ message: err.message });
-    res.status(400).json({ message: 'Could not update time entry.', error: err.message });
-  }
-});
-
-// PUT /api/time-entries/:id/invoiced - admin marks entries as invoiced
-router.put('/:id/invoiced', requireRole('admin'), async (req, res) => {
-  try {
-    const entry = await TimeEntry.findById(req.params.id).populate('assignment', 'status');
-    if (!entry) return res.status(404).json({ message: 'Time entry not found.' });
-    if (entry.assignment?.status === 'invoiced') {
-      return res.status(400).json({ message: INVOICED_ASSIGNMENT_LOCKED });
-    }
-    entry.invoiced = !!req.body.invoiced;
-    await entry.save();
-    res.json(entry.depopulate('assignment'));
-  } catch (err) {
     res.status(400).json({ message: 'Could not update time entry.', error: err.message });
   }
 });

@@ -12,6 +12,8 @@ async function run() {
   const entries = await TimeEntry.find({ travelIncluded: true, travelType: { $ne: 'other' } });
   let changed = 0;
   for (const entry of entries) {
+    // Older entries have an amount without km or rate; recomputing would set them to 0
+    if (!entry.travelKm || !entry.travelRate) continue;
     const rounded = Math.round((entry.travelKm || 0) * (entry.travelRate || 0));
     if (entry.travelAmount === rounded) continue;
     console.log(`${entry._id}: ${entry.travelKm} km × ${entry.travelRate} — ${entry.travelAmount} -> ${rounded}`);

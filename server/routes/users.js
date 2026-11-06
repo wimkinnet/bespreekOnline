@@ -120,17 +120,4 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id - deactivate rather than hard-delete, to preserve time-entry history
-router.delete('/:id', requireRole('admin'), async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'User not found.' });
-    user.active = false;
-    await user.save();
-    res.json({ message: 'User deactivated.' });
-  } catch (err) {
-    res.status(400).json({ message: 'Could not deactivate user.', error: err.message });
-  }
-});
-
 module.exports = router;

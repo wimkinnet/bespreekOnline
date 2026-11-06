@@ -50,9 +50,19 @@ router.get('/:id', async (req, res) => {
       { hours: 0, days: 0, amount: 0, travelKm: 0, travelAmount: 0 }
     );
 
-    const documents = await Document.find({ assignment: assignment._id }).sort({ createdAt: -1 });
+    // Totals stay over everyone's time (the remaining fixed fee depends on it); a consultant only sees their own
+    // time logs, and invoices and proposals only when they uploaded them, as on the documents route
+    const isAdmin = req.user.role === 'admin';
+    const documentFilter = { assignment: assignment._id };
+    if (!isAdmin) documentFilter.$or = [{ category: { $nin: ['bill', 'proposal'] } }, { uploadedBy: req.user._id }];
+    const documents = await Document.find(documentFilter).sort({ createdAt: -1 });
 
-    res.json({ assignment, timeEntries, totals, documents });
+    res.json({
+      assignment,
+      timeEntries: isAdmin ? timeEntries : timeEntries.filter((e) => String(e.consultant?._id) === String(req.user._id)),
+      totals,
+      documents,
+    });
   } catch (err) {
     res.status(500).json({ message: 'Could not load assignment.', error: err.message });
   }
@@ -125,23 +135,6 @@ router.put('/:id/complete', async (req, res) => {
     res.json(assignment);
   } catch (err) {
     res.status(400).json({ message: 'Could not complete assignment.', error: err.message });
-  }
-});
-
-// DELETE /api/assignments/:id - admin only, blocked if time entries exist
-router.delete('/:id', requireRole('admin'), async (req, res) => {
-  try {
-    const entryCount = await TimeEntry.countDocuments({ assignment: req.params.id });
-    if (entryCount > 0) {
-      return res.status(400).json({
-        message: `This assignment has ${entryCount} time entr${entryCount === 1 ? 'y' : 'ies'} logged. Remove them first.`,
-      });
-    }
-    const assignment = await Assignment.findByIdAndDelete(req.params.id);
-    if (!assignment) return res.status(404).json({ message: 'Assignment not found.' });
-    res.json({ message: 'Assignment deleted.' });
-  } catch (err) {
-    res.status(400).json({ message: 'Could not delete assignment.', error: err.message });
   }
 });
 

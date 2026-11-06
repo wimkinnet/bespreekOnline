@@ -123,7 +123,7 @@ router.post('/', async (req, res) => {
     if (!claim.lines.length) return res.status(400).json({ message: 'No unclaimed trips in this period.' });
 
     const issueDate = new Date();
-    const year = issueDate.getFullYear();
+    const year = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels', year: 'numeric' }).format(issueDate));
     const last = await TravelClaim.findOne({ consultant: consultant._id, year }).sort({ sequence: -1 });
     const sequence = (last?.sequence || 0) + 1;
     const home = consultant.homeAddress || {};

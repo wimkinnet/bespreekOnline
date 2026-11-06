@@ -45,7 +45,7 @@ function fileFilter(req, file, cb) {
   if (ALLOWED_MIME.has(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Unsupported file type. Allowed: PDF, Word, Excel, CSV, PNG, JPG.'));
+    cb(Object.assign(new Error('Unsupported file type. Allowed: PDF, Word, Excel, CSV, PNG, JPG.'), { code: 'UNSUPPORTED_FILE' }));
   }
 }
 

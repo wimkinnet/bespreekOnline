@@ -3,7 +3,6 @@ const router = express.Router();
 const Client = require('../models/Client');
 const Assignment = require('../models/Assignment');
 const Document = require('../models/Document');
-const TimeEntry = require('../models/TimeEntry');
 const { protect, requireRole } = require('../middleware/auth');
 
 router.use(protect);
@@ -100,29 +99,6 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     res.json(client);
   } catch (err) {
     res.status(400).json({ message: 'Could not update client.', error: err.message });
-  }
-});
-
-// DELETE /api/clients/:id - admin only, blocked if assignments or member schools still exist
-router.delete('/:id', requireRole('admin'), async (req, res) => {
-  try {
-    const memberCount = await Client.countDocuments({ parentPool: req.params.id });
-    if (memberCount > 0) {
-      return res.status(400).json({
-        message: `This school group still has ${memberCount} school(s). Unlink them first.`,
-      });
-    }
-    const assignmentCount = await Assignment.countDocuments({ client: req.params.id });
-    if (assignmentCount > 0) {
-      return res.status(400).json({
-        message: `This client has ${assignmentCount} assignment(s). Remove or reassign them first.`,
-      });
-    }
-    const client = await Client.findByIdAndDelete(req.params.id);
-    if (!client) return res.status(404).json({ message: 'Client not found.' });
-    res.json({ message: 'Client deleted.' });
-  } catch (err) {
-    res.status(400).json({ message: 'Could not delete client.', error: err.message });
   }
 });
 

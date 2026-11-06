@@ -50,7 +50,10 @@ app.get('*', (req, res, next) => {
 // Central error handler (e.g. multer file-size/type errors)
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ message: err.message || 'Something went wrong.' });
+  // Upload problems (wrong type, too large) are for the user to fix, so they are not server errors
+  const status = err.status || (err.name === 'MulterError' || err.code === 'UNSUPPORTED_FILE' ? 400 : 500);
+  const message = err.code === 'LIMIT_FILE_SIZE' ? 'The file is too large (25 MB at most).' : err.message;
+  res.status(status).json({ message: message || 'Something went wrong.' });
 });
 
 const PORT = process.env.PORT || 5001;

@@ -3,12 +3,14 @@ import api from '../api/axios';
 import { formatEUR, billingTypeLabel } from '../utils/format';
 import TravelClaimModal from '../components/TravelClaimModal';
 
+// Dates as yyyy-mm-dd on this computer; toISOString would give the UTC date, a day early in Belgium
+const localIso = (d) => new Intl.DateTimeFormat('en-CA').format(d);
 function firstOfMonth() {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  return localIso(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return localIso(new Date());
 }
 
 const GROUPINGS = [
@@ -133,11 +135,12 @@ export default function Reports() {
   async function exportByClient() {
     setExporting(true);
     try {
-      const res = await api.get('/reports/by-client.xlsx', { params: { from, to }, responseType: 'blob' });
+      // The period of the numbers on screen, not dates typed since without clicking Update
+      const res = await api.get('/reports/by-client.xlsx', { params: loadedPeriod, responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `report-by-client_${from}_${to}.xlsx`;
+      link.download = `report-by-client_${loadedPeriod.from}_${loadedPeriod.to}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
     } catch {

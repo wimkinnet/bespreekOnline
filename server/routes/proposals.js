@@ -157,7 +157,13 @@ router.post('/preview', async (req, res) => {
 // POST /api/proposals
 router.post('/', async (req, res) => {
   try {
-    const proposal = await Proposal.create({ ...pick(req.body), number: await nextProposalNumber(), createdBy: req.user._id });
+    const data = pick(req.body);
+    const proposal = await Proposal.create({
+      ...data,
+      ...(data.status === 'sent' ? { sentAt: new Date() } : {}),
+      number: await nextProposalNumber(),
+      createdBy: req.user._id,
+    });
     const storedDocument = proposal.status === 'sent' ? await storeSentPdf(proposal, req.user._id) : null;
     res.status(201).json({ proposal, storedDocument });
   } catch (err) {
@@ -172,6 +178,7 @@ router.put('/:id', async (req, res) => {
     if (!proposal) return res.status(404).json({ message: 'Proposal not found.' });
     const wasSent = proposal.status === 'sent';
     proposal.set(pick(req.body));
+    if (proposal.status === 'sent' && !wasSent) proposal.sentAt = new Date();
     let createdNow = [];
     if (proposal.status === 'accepted' && proposal.assignmentMode !== 'none' && proposal.createdAssignments.length === 0) {
       await proposal.validate();

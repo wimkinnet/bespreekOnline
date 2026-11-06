@@ -640,6 +640,18 @@ textarea {
   font-size: 12px;
 }
 
+.badge.proposal-waiting {
+  background: #f6efdc;
+  color: #7a5e1f;
+  white-space: nowrap;
+}
+
+.badge.proposal-follow-up {
+  background: var(--danger-tint);
+  color: var(--danger);
+  white-space: nowrap;
+}
+
 .dash-more {
   padding-top: 9px;
   border-top: 1px solid var(--border);

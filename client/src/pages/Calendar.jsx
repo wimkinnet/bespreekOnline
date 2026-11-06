@@ -97,8 +97,8 @@ export default function Calendar() {
       if (key > span.end) span.end = key;
     }
 
-    // Running period of each assignment. Without an end date, an ongoing assignment runs until
-    // today and a finished one until its last log.
+    // Running period of each assignment, used for its colour. Without an end date, an ongoing assignment runs
+    // until today and a finished one until its last log.
     const periods = [];
     for (const a of assignments) {
       const start = isoKey(a.startDate);
@@ -131,15 +131,16 @@ export default function Calendar() {
 
   const showAll = shownConsultants.size === 0;
   const days = monthGrid(month.year, month.month);
-  // Past days (up to today) show what was logged, future days the assignments that will be running
+  // Past days (up to today) show what was logged. Upcoming days only show assignments planned on that one
+  // date (start and end date the same); a range of dates says too little about when the work happens.
   const logsOn = (key) =>
     key <= today ? (logsByDay[key] || []).filter((e) => showAll || shownConsultants.has(e.consultant?._id)) : [];
   const runningOn = (key) =>
     key > today
       ? periods.filter(
           (p) =>
-            p.start <= key &&
-            key <= p.end &&
+            p.start === key &&
+            isoKey(p.assignment.endDate) === key &&
             (showAll || p.assignment.consultants?.some((c) => shownConsultants.has(c?._id)))
         )
       : [];
@@ -268,7 +269,7 @@ export default function Calendar() {
                 <span className="calendar-dot" /> time log
               </span>
               <span>
-                <span className="calendar-stripe" style={{ width: 18 }} /> assignment running
+                <span className="calendar-stripe" style={{ width: 18 }} /> assignment planned on that date
               </span>
             </div>
           </div>
@@ -276,7 +277,7 @@ export default function Calendar() {
           <div className="card calendar-details">
             <h2>{keyLabel(selected)}</h2>
             {dayLogs.length === 0 && dayRunning.length === 0 && (
-              <p className="muted">{selected <= today ? 'No time logged on this day.' : 'No assignments running on this day.'}</p>
+              <p className="muted">{selected <= today ? 'No time logged on this day.' : 'No assignments planned on this date.'}</p>
             )}
 
             {dayLogs.length > 0 && (
@@ -311,7 +312,7 @@ export default function Calendar() {
 
             {dayRunning.length > 0 && (
               <>
-                <h3>Assignments running</h3>
+                <h3>Planned on this date</h3>
                 {dayRunning.map(({ id, start, end }) => {
                   const a = assignmentById[id];
                   return (
@@ -324,7 +325,7 @@ export default function Calendar() {
                       </div>
                       <div className="muted">{a.client?.name}</div>
                       <div>
-                        {keyLabel(start)} – {a.endDate ? keyLabel(end) : 'no end date'}
+                        {keyLabel(start)}
                       </div>
                       {a.consultants?.length > 0 && (
                         <div className="muted">{a.consultants.map((c) => c.name).join(', ')}</div>

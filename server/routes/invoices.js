@@ -162,12 +162,12 @@ router.post('/:clientId/create', async (req, res) => {
       document: { _id: storedDocument._id, originalName: storedDocument.originalName },
     });
   } catch (err) {
-    if (err instanceof onfact.OnFactError) return res.status(400).json({ message: err.message });
     // Nothing was marked, so no invoice may stay behind, and an unused last number goes back so the series has no gap
     if (storedDocument) await Document.deleteOne({ _id: storedDocument._id }).catch(() => {});
     if (issued) {
       await Setting.updateOne({ key: issued.key, sequence: issued.sequence }, { $inc: { sequence: -1 } }).catch(() => {});
     }
+    if (err instanceof onfact.OnFactError) return res.status(400).json({ message: err.message });
     res.status(500).json({ message: 'Could not create this invoice.', error: err.message });
   }
 });

@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const Document = require('../models/Document');
-const { protect, requireRole } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const { upload, UPLOAD_ROOT } = require('../middleware/upload');
 
 router.use(protect);
@@ -49,7 +49,10 @@ router.post('/', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file was uploaded.' });
     const { client, assignment, category, notes } = req.body;
-    if (!client) return res.status(400).json({ message: 'A client is required.' });
+    if (!client) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ message: 'A client is required.' });
+    }
 
     const doc = await Document.create({
       client,
@@ -65,6 +68,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 
     res.status(201).json(doc);
   } catch (err) {
+    if (req.file) fs.unlink(req.file.path, () => {});
     res.status(400).json({ message: 'Upload failed.', error: err.message });
   }
 });

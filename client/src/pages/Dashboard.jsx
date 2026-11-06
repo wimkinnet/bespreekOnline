@@ -6,6 +6,7 @@ import { formatEUR, formatDate } from '../utils/format';
 
 const HOURS_PER_DAY = 8;
 const MONTHS_SHOWN = 6;
+const FOLLOW_UP_DAYS = 14; // a sent proposal without an answer after two weeks deserves a reminder
 
 const monthKey = (date) => String(date).slice(0, 7); // dates arrive as midnight UTC, so the ISO month is the calendar month
 const formatDays = (days) => new Intl.NumberFormat('en-GB', { maximumFractionDigits: 2 }).format(days);
@@ -130,14 +131,20 @@ export default function Dashboard() {
       api.get('/time-entries'),
       api.get('/assignments', { params: isAdmin ? { status: 'active' } : { status: 'active', mine: 'true' } }),
     ];
-    if (isAdmin) requests.push(api.get('/invoices/open'), api.get('/invoices/created'));
-    Promise.all(requests).then(([entries, assignments, open, created]) =>
-      setData({ entries: entries.data, assignments: assignments.data, open: open?.data || [], created: created?.data || [] })
+    if (isAdmin) requests.push(api.get('/invoices/open'), api.get('/invoices/created'), api.get('/proposals'));
+    Promise.all(requests).then(([entries, assignments, open, created, proposals]) =>
+      setData({
+        entries: entries.data,
+        assignments: assignments.data,
+        open: open?.data || [],
+        created: created?.data || [],
+        proposals: proposals?.data || [],
+      })
     );
   }, [isAdmin]);
 
   if (!data) return <p className="muted">Loading…</p>;
-  const { entries, assignments, open, created } = data;
+  const { entries, assignments, open, created, proposals } = data;
 
   const months = lastMonths(MONTHS_SHOWN).map((m) => ({
     ...m,
@@ -151,6 +158,15 @@ export default function Dashboard() {
   const unpaid = created.filter((i) => !i.paidAt);
   const overdue = unpaid.filter((i) => today > String(i.dueDate).slice(0, 10));
   const sum = (list, field) => list.reduce((s, i) => s + i[field], 0);
+
+  // Proposals sent but not yet accepted or declined, the longest waiting first
+  const daysSince = (date) => Math.max(0, Math.floor((Date.now() - new Date(date)) / 86400000));
+  const awaiting = proposals
+    .filter((p) => p.status === 'sent')
+    .map((p) => ({ ...p, waitingDays: daysSince(p.sentAt || p.date) }))
+    .sort((a, b) => b.waitingDays - a.waitingDays);
+  const drafts = proposals.filter((p) => p.status === 'draft').length;
+  const awaitingValue = awaiting.reduce((s, p) => s + p.budget.amount, 0);
 
   const byConsultant = Object.values(
     thisMonth.reduce((acc, e) => {
@@ -191,6 +207,17 @@ export default function Dashboard() {
               }
               to="/invoices"
             />
+            <Stat
+              label="Proposals awaiting answer"
+              value={formatEUR(awaitingValue)}
+              note={
+                awaiting.length
+                  ? `${awaiting.length} sent, longest ${awaiting[0].waitingDays} day${awaiting[0].waitingDays === 1 ? '' : 's'}` +
+                    (drafts ? ` · ${drafts} draft${drafts === 1 ? '' : 's'}` : '')
+                  : `None waiting${drafts ? ` · ${drafts} draft${drafts === 1 ? '' : 's'}` : ''}`
+              }
+              to="/proposals"
+            />
           </>
         )}
         <Stat
@@ -213,7 +240,23 @@ export default function Dashboard() {
             <div className="dash-card-head">
               <h2>Needs attention</h2>
             </div>
-            {overdue.length === 0 && open.length === 0 && <p className="muted">Nothing to do: all time is invoiced and paid on time.</p>}
+            {awaiting.length === 0 && overdue.length === 0 && open.length === 0 && (
+              <p className="muted">Nothing to do: no proposals waiting, all time invoiced and paid on time.</p>
+            )}
+            {awaiting.map((p) => (
+              <Link key={p._id} to="/proposals" className="dash-item">
+                <span className={`badge ${p.waitingDays >= FOLLOW_UP_DAYS ? 'proposal-follow-up' : 'proposal-waiting'}`}>
+                  {p.waitingDays >= FOLLOW_UP_DAYS ? 'Follow up' : 'Awaiting answer'}
+                </span>
+                <span className="dash-item-main">
+                  {p.number} · {p.client?.name}
+                  <span className="muted">
+                    sent {p.waitingDays === 0 ? 'today' : `${p.waitingDays} day${p.waitingDays === 1 ? '' : 's'} ago`} · {p.title}
+                  </span>
+                </span>
+                <strong>{formatEUR(p.budget.amount)}</strong>
+              </Link>
+            ))}
             {overdue.map((i) => (
               <Link key={i._id} to="/invoices" className="dash-item">
                 <span className="badge invoice-overdue">Overdue</span>

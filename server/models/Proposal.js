@@ -20,6 +20,7 @@ const proposalSchema = new mongoose.Schema(
     date: { type: Date, default: Date.now },
     brand: { type: String, enum: ['bespreek', 'catalista'], default: 'catalista' },
     status: { type: String, enum: ['draft', 'sent', 'accepted', 'declined'], default: 'draft' },
+    sentAt: { type: Date }, // when the status last became Sent; the dashboard counts the waiting days from it
     consultants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     introduction: { type: String, trim: true }, // "Aanleiding"
     goal: { type: String, trim: true }, // "Doelstelling"
