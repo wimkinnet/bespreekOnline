@@ -6,6 +6,8 @@ import { clientTypeLabel } from '../utils/format';
 import NewAssignmentModal from '../components/NewAssignmentModal';
 import ClientForm from '../components/ClientForm';
 
+const STATUS_ORDER = { prospect: 0, active: 1, inactive: 2 };
+
 export default function Clients() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -24,7 +26,8 @@ export default function Clients() {
     const { data } = await api.get('/clients', {
       params: { search: search || undefined, type: typeFilter || undefined },
     });
-    setClients(data);
+    // Prospects first, then active and inactive clients, each by name as the server sends them
+    setClients([...data].sort((a, b) => (STATUS_ORDER[a.status] ?? 1) - (STATUS_ORDER[b.status] ?? 1)));
     setLoading(false);
   }
 
