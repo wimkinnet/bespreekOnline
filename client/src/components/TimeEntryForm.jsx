@@ -60,7 +60,9 @@ function entryToForm(entry) {
 // Why a time entry can no longer be edited or deleted, or null when it still can be.
 // `assignmentStatus` defaults to the status on a populated assignment.
 export function entryLockReason(entry, assignmentStatus = entry.assignment?.status) {
-  if (entry.invoiced || assignmentStatus === 'invoiced') return 'Invoiced';
+  if (entry.invoiced) return 'Invoiced';
+  // A log that was never invoiced, such as a non-billable one, is only locked by its assignment's status
+  if (assignmentStatus === 'invoiced') return 'Assignment invoiced';
   if (entry.travelClaim) return 'On expense claim';
   return null;
 }
