@@ -748,7 +748,7 @@ export default function Proposals() {
                       <button className="btn btn-sm" onClick={() => showPdf(p, true)}>
                         Download
                       </button>
-                      {p.status === 'accepted' && !p.invoiceNumber && (
+                      {['sent', 'accepted'].includes(p.status) && !p.invoiceNumber && (
                         <button className="btn btn-sm" onClick={() => invoiceProposal(p)}>
                           Invoice
                         </button>

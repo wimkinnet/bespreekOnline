@@ -7,6 +7,7 @@ const Client = require('../models/Client');
 const Setting = require('../models/Setting');
 const User = require('../models/User');
 const Document = require('../models/Document');
+const TimeEntry = require('../models/TimeEntry');
 const { protect, requireRole } = require('../middleware/auth');
 const { renderProposalPdf, renderProposalBuffer } = require('../utils/proposalPdf');
 const { renderInvoiceBuffer } = require('../utils/invoicePdf');
@@ -235,7 +236,7 @@ router.get('/:id/pdf', async (req, res) => {
   }
 });
 
-// POST /api/proposals/:id/invoice - an invoice for an accepted proposal with one line referring to it, for work
+// POST /api/proposals/:id/invoice - an invoice for a sent or accepted proposal with one line referring to it, for work
 // that was already invoiced in detail before; it takes the next invoice number and touches no time logs
 router.post('/:id/invoice', async (req, res) => {
   let issued;
@@ -243,7 +244,9 @@ router.post('/:id/invoice', async (req, res) => {
   try {
     const proposal = await Proposal.findById(req.params.id);
     if (!proposal) return res.status(404).json({ message: 'Proposal not found.' });
-    if (proposal.status !== 'accepted') return res.status(400).json({ message: 'Only an accepted proposal can be invoiced.' });
+    if (!['sent', 'accepted'].includes(proposal.status)) {
+      return res.status(400).json({ message: 'Set the proposal to Sent or Accepted before invoicing it.' });
+    }
     if (proposal.invoiceNumber) {
       return res.status(400).json({ message: `This proposal was already invoiced as ${proposal.invoiceNumber}.` });
     }
@@ -281,6 +284,13 @@ router.post('/:id/invoice', async (req, res) => {
     });
     proposal.invoiceNumber = number;
     await proposal.save();
+    // The time logs of a replaced invoice are billed by this one from now on
+    if (proposal.replacesInvoice) {
+      await TimeEntry.updateMany(
+        { invoiceNumber: proposal.replacesInvoice, client: client._id },
+        { $set: { invoiced: true, invoiceNumber: number, invoiceDocument: storedDocument._id } }
+      );
+    }
     res.json({ invoiceNumber: number, document: { _id: storedDocument._id, originalName: storedDocument.originalName } });
   } catch (err) {
     // No invoice may stay behind, and an unused last number goes back so the series has no gap

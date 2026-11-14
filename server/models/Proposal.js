@@ -59,6 +59,8 @@ const proposalSchema = new mongoose.Schema(
     createdAssignments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Assignment' }],
     // The invoice made from this proposal with the one line "Prestaties zoals beschreven in offerte …"
     invoiceNumber: { type: String },
+    // An earlier invoice this proposal replaces: its time logs move to the proposal's invoice once that is made
+    replacesInvoice: { type: String },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
