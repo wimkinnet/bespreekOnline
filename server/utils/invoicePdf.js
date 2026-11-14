@@ -128,7 +128,17 @@ function renderInvoicePdf(invoice, stream) {
   };
 
   heading(`Klant: ${client.name}`, { size: 11.5, color: ACCENT, needed: 90 });
-  for (const assignment of invoice.assignments) {
+  // An invoice made from a proposal has one line that refers to it, without dates or quantities
+  if (invoice.summary) {
+    cols = [
+      { label: 'Omschrijving', w: width - 75 },
+      { label: 'Bedrag', w: 75, align: 'right' },
+    ];
+    drawRow(cols.map((c) => c.label), { header: true });
+    drawRow([invoice.summary, eur(invoice.totalExclVat)]);
+    y += 12;
+  }
+  for (const assignment of invoice.assignments || []) {
     // One consultant goes next to the assignment; with several, each line names its own
     const names = [...new Set(assignment.entries.map((e) => e.consultant?.name || ''))];
     const perLine = names.length > 1;
@@ -152,8 +162,8 @@ function renderInvoicePdf(invoice, stream) {
 
   // Totals
   const rows = [
-    ['Prestaties', eur(invoice.amount)],
-    ...(invoice.travel ? [[invoice.travel.name, eur(invoice.travel.price)]] : []),
+    ...(invoice.summary ? [] : [['Prestaties', eur(invoice.amount)]]),
+    ...(invoice.travel && !invoice.summary ? [[invoice.travel.name, eur(invoice.travel.price)]] : []),
     ['Totaal excl. btw', eur(invoice.totalExclVat)],
     client.vatExempt ? ['Btw', eur(0)] : [`Btw ${Math.round(invoice.vatRate * 100)}%`, eur(invoice.vatAmount)],
   ];

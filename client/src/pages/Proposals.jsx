@@ -92,7 +92,15 @@ function copyTexts(form, source) {
     ...form,
     introduction: source.introduction || '',
     goal: source.goal || '',
-    steps: (source.steps || []).map((s) => ({ title: s.title, description: s.description || '', proposedDates: '', days: s.days })),
+    steps: (source.steps || []).map((s) => ({
+      title: s.title,
+      description: s.description || '',
+      proposedDates: '',
+      unit: s.unit || 'days',
+      days: s.days ?? 0.5,
+      hours: s.hours ?? '',
+      rate: s.rate ?? '',
+    })),
     requirements: source.requirements || '',
     supportDays: source.supportDays || 0,
     supportLabel: source.supportLabel || EXAMPLE.supportLabel,
@@ -128,9 +136,23 @@ function toForm(p) {
   };
 }
 
+// The price of one step, as the server computes it: days at the day rate (or the step's own), hours at a rate,
+// or a fixed amount
+function stepAmount(step, dayRate) {
+  if (step.unit === 'hours') return Number(step.hours || 0) * Number(step.rate || 0);
+  if (step.unit === 'amount') return Number(step.rate || 0);
+  return Number(step.days || 0) * Number(step.rate || dayRate || 0);
+}
+
 function totals(form) {
-  const days = form.steps.reduce((s, step) => s + Number(step.days || 0), 0) + Number(form.supportDays || 0);
-  return { days, amount: days * Number(form.dayRate || 0) };
+  const days =
+    form.steps.reduce((s, step) => s + ((step.unit || 'days') === 'days' ? Number(step.days || 0) : 0), 0) +
+    Number(form.supportDays || 0);
+  const amount =
+    form.steps.reduce((s, step) => s + stepAmount(step, form.dayRate), 0) +
+    Number(form.supportDays || 0) * Number(form.dayRate || 0) +
+    Number(form.travelAmount || 0);
+  return { days, amount };
 }
 
 // The dialog in which a proposal is written, previewed and saved
@@ -342,20 +364,55 @@ function ProposalEditor({ initial, source, proposals, clients, users, onClose, o
                   </button>
                 </div>
               </div>
-              <div className="field-row" style={{ gridTemplateColumns: '3fr 1fr' }}>
+              <div className="field">
+                <label>Title</label>
+                <input value={step.title} onChange={(e) => setStep(i, 'title', e.target.value)} />
+              </div>
+              <div className="field-row" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
                 <div className="field">
-                  <label>Title</label>
-                  <input value={step.title} onChange={(e) => setStep(i, 'title', e.target.value)} />
-                </div>
-                <div className="field">
-                  <label>Days</label>
-                  <select value={step.days} onChange={(e) => setStep(i, 'days', Number(e.target.value))}>
-                    {DAY_OPTIONS.map((d) => (
-                      <option key={d} value={d}>
-                        {num(d)}
-                      </option>
-                    ))}
+                  <label>Priced per</label>
+                  <select value={step.unit || 'days'} onChange={(e) => setStep(i, 'unit', e.target.value)}>
+                    <option value="days">Day</option>
+                    <option value="hours">Hour</option>
+                    <option value="amount">Fixed amount</option>
                   </select>
+                </div>
+                {(step.unit || 'days') === 'days' && (
+                  <div className="field">
+                    <label>Days</label>
+                    <select value={step.days} onChange={(e) => setStep(i, 'days', Number(e.target.value))}>
+                      {DAY_OPTIONS.map((d) => (
+                        <option key={d} value={d}>
+                          {num(d)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {step.unit === 'hours' && (
+                  <div className="field">
+                    <label>Hours</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.25"
+                      value={step.hours ?? ''}
+                      onChange={(e) => setStep(i, 'hours', e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                  </div>
+                )}
+                <div className="field">
+                  <label>
+                    {step.unit === 'hours' ? '€ per hour' : step.unit === 'amount' ? 'Amount (€)' : '€ per day'}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder={(step.unit || 'days') === 'days' ? `${form.dayRate} (day rate)` : ''}
+                    value={step.rate ?? ''}
+                    onChange={(e) => setStep(i, 'rate', e.target.value === '' ? '' : Number(e.target.value))}
+                  />
                 </div>
               </div>
               <div className="field">
@@ -376,7 +433,9 @@ function ProposalEditor({ initial, source, proposals, clients, users, onClose, o
             type="button"
             className="btn btn-sm"
             style={{ marginBottom: 14 }}
-            onClick={() => set('steps', [...form.steps, { title: '', description: '', proposedDates: '', days: 0.5 }])}
+            onClick={() =>
+              set('steps', [...form.steps, { title: '', description: '', proposedDates: '', unit: 'days', days: 0.5, hours: '', rate: '' }])
+            }
           >
             + Add step
           </button>
@@ -422,6 +481,23 @@ function ProposalEditor({ initial, source, proposals, clients, users, onClose, o
                 value={form.conditions.travelRate}
                 onChange={(e) => setCondition('travelRate', Number(e.target.value))}
               />
+            </div>
+          </div>
+
+          <div className="field-row" style={{ gridTemplateColumns: '1fr 2fr' }}>
+            <div className="field">
+              <label>Travel already known (€)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.travelAmount || ''}
+                onChange={(e) => set('travelAmount', e.target.value === '' ? 0 : Number(e.target.value))}
+              />
+            </div>
+            <div className="field">
+              <label>Travel description</label>
+              <input placeholder="230 km" value={form.travelNote || ''} onChange={(e) => set('travelNote', e.target.value)} />
             </div>
           </div>
 
@@ -563,6 +639,32 @@ export default function Proposals() {
     }
   }
 
+  // For work that was already invoiced in detail: an invoice with one line referring to this proposal
+  async function invoiceProposal(p) {
+    const ok = window.confirm(
+      `Create an invoice for proposal ${p.number} to ${p.client?.name}?\n\n` +
+        `One line: "Prestaties zoals beschreven in offerte ${p.number}", ${formatEUR(p.budget.amount)} excl. VAT.\n\n` +
+        'It gets the next invoice number and is stored with the client. Time logs are not changed. The app cannot undo this.'
+    );
+    if (!ok) return;
+    setError('');
+    setMessage('');
+    try {
+      const { data } = await api.post(`/proposals/${p._id}/invoice`);
+      const res = await api.get(`/documents/${data.document._id}/download`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = data.document.originalName;
+      link.click();
+      URL.revokeObjectURL(url);
+      setMessage(`Invoice ${data.invoiceNumber} created and downloaded.`);
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not create the invoice.');
+    }
+  }
+
   async function remove(p) {
     if (!window.confirm(`Delete proposal ${p.number}?`)) return;
     setError('');
@@ -621,6 +723,11 @@ export default function Proposals() {
                   <td>{formatEUR(p.budget.amount)}</td>
                   <td>
                     <span className={`badge ${STATUS_BADGES[p.status]}`}>{STATUS_LABELS[p.status]}</span>
+                    {p.invoiceNumber && (
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        Invoice {p.invoiceNumber}
+                      </div>
+                    )}
                     {p.createdAssignments?.length > 0 && (
                       <div className="muted" style={{ fontSize: 12 }}>
                         {p.createdAssignments.length} assignment{p.createdAssignments.length === 1 ? '' : 's'}
@@ -641,7 +748,12 @@ export default function Proposals() {
                       <button className="btn btn-sm" onClick={() => showPdf(p, true)}>
                         Download
                       </button>
-                      {!p.createdAssignments?.length && (
+                      {p.status === 'accepted' && !p.invoiceNumber && (
+                        <button className="btn btn-sm" onClick={() => invoiceProposal(p)}>
+                          Invoice
+                        </button>
+                      )}
+                      {!p.createdAssignments?.length && !p.invoiceNumber && (
                         <button className="btn btn-sm btn-danger" onClick={() => remove(p)}>
                           Delete
                         </button>

@@ -60,6 +60,13 @@ const CLAUSES = {
 
 const eur = (n) => new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(n);
 const num = (n) => new Intl.NumberFormat('nl-BE', { maximumFractionDigits: 2 }).format(n);
+// The quantity of a budget line or step as printed: "0,5 dag", "2 dagen", "7 uur", or nothing for an amount
+function quantity({ unit, days, hours }) {
+  if (unit === 'hours') return `${num(hours || 0)} uur`;
+  if (unit === 'days') return `${num(days || 0)} ${Number(days) > 1 ? 'dagen' : 'dag'}`;
+  return '';
+}
+
 const longDate = (d) => new Intl.DateTimeFormat('nl-BE', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(d));
 
 function renderProposalPdf(proposal, stream) {
@@ -120,10 +127,12 @@ function renderProposalPdf(proposal, stream) {
     return doc.y + 22;
   };
 
-  // ---- Situation
-  y = sectionPage('Situering opdracht');
-  if (proposal.introduction) y = body(proposal.introduction, subheading('Aanleiding', y));
-  if (proposal.goal) body(proposal.goal, subheading('Doelstelling', y));
+  // ---- Situation, left out when there is no text for it
+  if (proposal.introduction || proposal.goal) {
+    y = sectionPage('Situering opdracht');
+    if (proposal.introduction) y = body(proposal.introduction, subheading('Aanleiding', y));
+    if (proposal.goal) body(proposal.goal, subheading('Doelstelling', y));
+  }
 
   const split = Math.round(W * 0.42);
   const photoPages = new Set(); // their footer sits on the coloured panel
@@ -153,19 +162,27 @@ function renderProposalPdf(proposal, stream) {
     doc.font('Helvetica').fontSize(10).fillColor('#ffffff').text(consultant.bio, px, py + 20, { width: pw, lineGap: 2.5, height: H - py - 90 });
   }
 
-  // ---- Plan
-  y = sectionPage('Plan van aanpak');
-  (proposal.steps || []).forEach((step, i) => {
-    doc.font('Helvetica-Bold').fontSize(12).fillColor(brand.main).text(`Stap ${i + 1}: ${step.title}`, left, y, { width });
-    if (step.description) doc.font('Helvetica').fontSize(11).fillColor(INK).text(step.description, left, doc.y + 4, { width, lineGap: 2 });
-    const facts = [`${num(step.days)} dag${step.days === 1 ? '' : 'en'} met het team`, step.proposedDates && `voorstel: ${step.proposedDates}`]
-      .filter(Boolean)
-      .join('  ·  ');
-    doc.font('Helvetica-Oblique').fontSize(10).fillColor(SOFT).text(facts, left, doc.y + 4, { width });
-    y = doc.y + 18;
-  });
-  if (proposal.requirements) {
-    doc.font('Helvetica').fontSize(11).fillColor(INK).text(proposal.requirements, left, y, { width, lineGap: 2 });
+  // ---- Plan, left out when the steps carry no description, dates or requirements (the budget lists them)
+  const steps = proposal.steps || [];
+  if (proposal.requirements || steps.some((s) => s.description || s.proposedDates)) {
+    y = sectionPage('Plan van aanpak');
+    steps.forEach((step, i) => {
+      doc.font('Helvetica-Bold').fontSize(12).fillColor(brand.main).text(`Stap ${i + 1}: ${step.title}`, left, y, { width });
+      if (step.description) doc.font('Helvetica').fontSize(11).fillColor(INK).text(step.description, left, doc.y + 4, { width, lineGap: 2 });
+      const unit = step.unit || 'days';
+      const facts = [
+        unit === 'days' && `${quantity({ unit, days: step.days })} met het team`,
+        unit === 'hours' && quantity({ unit, hours: step.hours }),
+        step.proposedDates && `voorstel: ${step.proposedDates}`,
+      ]
+        .filter(Boolean)
+        .join('  ·  ');
+      if (facts) doc.font('Helvetica-Oblique').fontSize(10).fillColor(SOFT).text(facts, left, doc.y + 4, { width });
+      y = doc.y + 18;
+    });
+    if (proposal.requirements) {
+      doc.font('Helvetica').fontSize(11).fillColor(INK).text(proposal.requirements, left, y, { width, lineGap: 2 });
+    }
   }
 
   // ---- Budget
@@ -173,7 +190,7 @@ function renderProposalPdf(proposal, stream) {
   y = subheading(`Begeleiding ${proposal.client?.name || ''}`, y);
   const cols = [
     { label: '', w: width - 170 },
-    { label: 'Dagen', w: 70, align: 'center' },
+    { label: 'Aantal', w: 70, align: 'center' },
     { label: 'Prijs in euro', w: 100, align: 'right' },
   ];
   const row = (values, { bold = false, fill = null, color = INK } = {}) => {
@@ -189,10 +206,25 @@ function renderProposalPdf(proposal, stream) {
     doc.moveTo(left, y).lineTo(left + width, y).lineWidth(0.75).strokeColor(RULE).stroke();
   };
   row(cols.map((c) => c.label), { bold: true });
-  for (const line of proposal.budget.lines) row([line.label, num(line.days), eur(line.amount)]);
-  row(['Totaal', num(proposal.budget.days), eur(proposal.budget.amount)], { bold: true, fill: brand.dark, color: '#ffffff' });
+  const lines = proposal.budget.lines;
+  for (const line of lines) row([line.label, quantity(line), eur(line.amount)]);
+  // A total quantity only makes sense when every line counts days
+  const allDays = lines.every((l) => l.unit === 'days');
+  row(['Totaal', allDays ? quantity({ unit: 'days', days: proposal.budget.days }) : '', eur(proposal.budget.amount)], {
+    bold: true,
+    fill: brand.dark,
+    color: '#ffffff',
+  });
+  const dayRates = [...new Set(lines.filter((l) => l.unit === 'days').map((l) => l.rate))];
+  const hourRates = [...new Set(lines.filter((l) => l.unit === 'hours').map((l) => l.rate))];
+  const rates = [
+    dayRates.length && `Dagtarief ${dayRates.map(eur).join(' / ')}`,
+    hourRates.length && `uurtarief ${hourRates.map(eur).join(' / ')}`,
+  ].filter(Boolean);
+  const hasTravel = lines.some((l) => l.unit === 'travel');
+  const note = `Prijzen zijn exclusief btw en ${hasTravel ? 'inclusief de vermelde' : 'exclusief'} verplaatsingskosten.`;
   doc.font('Helvetica').fontSize(9.5).fillColor(SOFT).text(
-    `Dagtarief ${eur(proposal.dayRate)}. Prijzen zijn exclusief btw en exclusief verplaatsingskosten.`,
+    rates.length ? `${rates.join(', ').replace(/^./, (c) => c.toUpperCase())}. ${note}` : note,
     left,
     y + 10,
     { width }

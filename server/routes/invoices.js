@@ -6,26 +6,13 @@ const Document = require('../models/Document');
 const Setting = require('../models/Setting');
 const { protect, requireRole } = require('../middleware/auth');
 const onfact = require('../utils/onfact');
-const { invoiceTotals, openInvoices, pdfDetails } = require('../utils/invoiceData');
+const { invoiceTotals, openInvoices, pdfDetails, belgianDate, nextInvoiceNumber } = require('../utils/invoiceData');
 const { renderInvoicePdf, renderInvoiceBuffer, PAYMENT_TERM_DAYS } = require('../utils/invoicePdf');
 
 router.use(protect, requireRole('admin'));
 
 function safeFileName(client) {
   return client.name.replace(/[^\w-]+/g, '_');
-}
-
-// Today in Belgium, which is the invoice date and decides the year of the number
-function belgianDate() {
-  const [year, month, day] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date()).split('-');
-  return { year, iso: `${year}-${month}-${day}`, date: new Date(`${year}-${month}-${day}T00:00:00Z`) };
-}
-
-// YYNNNN: the last two digits of the year and a sequence stored per year
-async function nextInvoiceNumber(year) {
-  const key = `invoiceSequence:${year}`;
-  const { sequence } = await Setting.findOneAndUpdate({ key }, { $inc: { sequence: 1 } }, { upsert: true, new: true });
-  return { key, sequence, number: `${year.slice(-2)}${String(sequence).padStart(4, '0')}` };
 }
 
 // GET /api/invoices/open - what can still be invoiced, per client
@@ -73,7 +60,10 @@ router.get('/created', async (req, res) => {
         dueDate: dueDate(d.createdAt),
         paidAt: d.paidAt,
         client: d.client,
-        ...invoiceTotals(entries.filter((e) => e.invoiceNumber === d.invoiceNumber), d.client?.vatExempt),
+        // An invoice made from a proposal has no time logs of its own and carries its totals itself
+        ...(d.totalExclVat != null
+          ? { totalExclVat: d.totalExclVat, vatAmount: d.vatAmount, totalInclVat: Math.round((d.totalExclVat + d.vatAmount) * 100) / 100 }
+          : invoiceTotals(entries.filter((e) => e.invoiceNumber === d.invoiceNumber), d.client?.vatExempt)),
       }))
     );
   } catch (err) {

@@ -7,7 +7,11 @@ const stepSchema = new mongoose.Schema(
     title: { type: String, trim: true, required: true },
     description: { type: String, trim: true },
     proposedDates: { type: String, trim: true }, // free text, e.g. "28/09 voormiddag"
+    // How the step is priced: days at the day rate (or its own rate), hours at a rate, or a fixed amount
+    unit: { type: String, enum: ['days', 'hours', 'amount'], default: 'days' },
     days: { type: Number, min: 0, default: 0.5 }, // working days with the client
+    hours: { type: Number, min: 0 },
+    rate: { type: Number, min: 0 }, // per day or hour; for 'amount' the amount itself; empty days use dayRate
   },
   { _id: false }
 );
@@ -29,6 +33,9 @@ const proposalSchema = new mongoose.Schema(
     supportDays: { type: Number, min: 0, default: 0 }, // preparation and follow-up without the client
     supportLabel: { type: String, trim: true },
     dayRate: { type: Number, min: 0, default: 950 },
+    // Travel costs already known, shown as a budget line (the price is then including them)
+    travelAmount: { type: Number, min: 0, default: 0 },
+    travelNote: { type: String, trim: true }, // e.g. "230 km"
     conditions: {
       travelRate: { type: Number, min: 0, default: 0.45 },
       invoicing: { type: String, enum: ['monthly', 'per_step', 'end'], default: 'monthly' },
@@ -50,6 +57,8 @@ const proposalSchema = new mongoose.Schema(
     // What accepting the proposal creates: nothing, one assignment, or one per step
     assignmentMode: { type: String, enum: ['none', 'single', 'per_step'], default: 'none' },
     createdAssignments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Assignment' }],
+    // The invoice made from this proposal with the one line "Prestaties zoals beschreven in offerte …"
+    invoiceNumber: { type: String },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

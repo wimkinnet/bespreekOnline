@@ -15,6 +15,10 @@ const documentSchema = new mongoose.Schema(
     invoiceNumber: { type: String },
     pdf: { type: Buffer, select: false },
     paidAt: { type: Date, default: null }, // set by hand on the Invoices tab
+    // Only for an invoice made from a proposal, which has no time logs to compute its totals from
+    totalExclVat: { type: Number },
+    vatAmount: { type: Number },
+    proposal: { type: mongoose.Schema.Types.ObjectId, ref: 'Proposal' },
   },
   { timestamps: true }
 );

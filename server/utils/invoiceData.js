@@ -78,4 +78,17 @@ async function pdfDetails(invoice, { brand, number, date }) {
   };
 }
 
-module.exports = { buildInvoice, invoiceTotals, openInvoices, pdfDetails };
+// Today in Belgium, which is the invoice date and decides the year of the number
+function belgianDate() {
+  const [year, month, day] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Brussels' }).format(new Date()).split('-');
+  return { year, iso: `${year}-${month}-${day}`, date: new Date(`${year}-${month}-${day}T00:00:00Z`) };
+}
+
+// YYNNNN: the last two digits of the year and a sequence stored per year
+async function nextInvoiceNumber(year) {
+  const key = `invoiceSequence:${year}`;
+  const { sequence } = await Setting.findOneAndUpdate({ key }, { $inc: { sequence: 1 } }, { upsert: true, new: true });
+  return { key, sequence, number: `${year.slice(-2)}${String(sequence).padStart(4, '0')}` };
+}
+
+module.exports = { buildInvoice, invoiceTotals, openInvoices, pdfDetails, belgianDate, nextInvoiceNumber, VAT_RATE };

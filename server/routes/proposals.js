@@ -9,12 +9,15 @@ const User = require('../models/User');
 const Document = require('../models/Document');
 const { protect, requireRole } = require('../middleware/auth');
 const { renderProposalPdf, renderProposalBuffer } = require('../utils/proposalPdf');
+const { renderInvoiceBuffer } = require('../utils/invoicePdf');
+const { pdfDetails, belgianDate, nextInvoiceNumber, VAT_RATE } = require('../utils/invoiceData');
+const onfact = require('../utils/onfact');
 
 router.use(protect, requireRole('admin'));
 
 const FIELDS = [
   'client', 'title', 'date', 'brand', 'status', 'consultants', 'introduction', 'goal', 'steps',
-  'requirements', 'supportDays', 'supportLabel', 'dayRate', 'conditions', 'assignmentMode',
+  'requirements', 'supportDays', 'supportLabel', 'dayRate', 'travelAmount', 'travelNote', 'conditions', 'assignmentMode',
 ];
 
 function pick(body) {
@@ -25,23 +28,38 @@ function roundCents(n) {
   return Math.round(n * 100) / 100;
 }
 
-// Days and price per budget line, and the totals
+// One budget line of a step: days at the day rate (or the step's own), hours at a rate, or a fixed amount
+function stepLine(step, dayRate) {
+  const unit = step.unit || 'days';
+  if (unit === 'hours') {
+    const hours = Number(step.hours) || 0;
+    return { unit, hours, rate: Number(step.rate) || 0, amount: roundCents(hours * (Number(step.rate) || 0)) };
+  }
+  if (unit === 'amount') return { unit, amount: roundCents(Number(step.rate) || 0) };
+  const days = Number(step.days) || 0;
+  const rate = Number(step.rate) || dayRate || 0;
+  return { unit, days, rate, amount: roundCents(days * rate) };
+}
+
+// Quantity and price per budget line, and the totals; travel already known comes last
 function budget(proposal) {
-  const rate = proposal.dayRate || 0;
-  const lines = (proposal.steps || []).map((s, i) => ({
-    label: `Stap ${i + 1}: ${s.title}`,
-    days: Number(s.days) || 0,
-    amount: roundCents((Number(s.days) || 0) * rate),
-  }));
+  const lines = (proposal.steps || []).map((s, i) => ({ label: `Stap ${i + 1}: ${s.title}`, ...stepLine(s, proposal.dayRate) }));
   if (Number(proposal.supportDays) > 0) {
     lines.push({
       label: proposal.supportLabel || 'Ondersteunend werk',
-      days: Number(proposal.supportDays),
-      amount: roundCents(Number(proposal.supportDays) * rate),
+      ...stepLine({ unit: 'days', days: proposal.supportDays }, proposal.dayRate),
     });
   }
-  const days = lines.reduce((s, l) => s + l.days, 0);
-  return { lines, days, amount: roundCents(lines.reduce((s, l) => s + l.amount, 0)) };
+  if (Number(proposal.travelAmount) > 0) {
+    lines.push({
+      label: `Verplaatsingskosten${proposal.travelNote ? ` (${proposal.travelNote})` : ''}`,
+      unit: 'travel',
+      amount: roundCents(Number(proposal.travelAmount)),
+    });
+  }
+  const days = lines.reduce((s, l) => s + (l.days || 0), 0);
+  const hours = lines.reduce((s, l) => s + (l.hours || 0), 0);
+  return { lines, days, hours, amount: roundCents(lines.reduce((s, l) => s + l.amount, 0)) };
 }
 
 // O + YY + a sequence per year, e.g. O260001
@@ -70,10 +88,21 @@ async function createAssignments(proposal, userId) {
     proposal.assignmentMode === 'single'
       ? [{ title: proposal.title, description: from }]
       : [
-          ...proposal.steps.map((s, i) => ({
-            title: `Stap ${i + 1}: ${s.title}`,
-            description: [from, s.description].filter(Boolean).join('\n\n'),
-          })),
+          ...proposal.steps.map((s, i) => {
+            // Each step keeps its own pricing: per day, per hour, or its amount as a fixed fee
+            const line = stepLine(s, proposal.dayRate);
+            const billing =
+              line.unit === 'hours'
+                ? { billingType: 'hourly', rate: line.rate }
+                : line.unit === 'amount'
+                  ? { billingType: 'fixed', rate: line.amount }
+                  : { billingType: 'daily', rate: line.rate };
+            return {
+              title: `Stap ${i + 1}: ${s.title}`,
+              description: [from, s.description].filter(Boolean).join('\n\n'),
+              ...billing,
+            };
+          }),
           ...(proposal.supportDays > 0 ? [{ title: proposal.supportLabel || 'Ondersteunend werk', description: from }] : []),
         ];
   const created = await Assignment.insertMany(plans.map((p) => ({ ...common, ...p })));
@@ -206,13 +235,71 @@ router.get('/:id/pdf', async (req, res) => {
   }
 });
 
+// POST /api/proposals/:id/invoice - an invoice for an accepted proposal with one line referring to it, for work
+// that was already invoiced in detail before; it takes the next invoice number and touches no time logs
+router.post('/:id/invoice', async (req, res) => {
+  let issued;
+  let storedDocument;
+  try {
+    const proposal = await Proposal.findById(req.params.id);
+    if (!proposal) return res.status(404).json({ message: 'Proposal not found.' });
+    if (proposal.status !== 'accepted') return res.status(400).json({ message: 'Only an accepted proposal can be invoiced.' });
+    if (proposal.invoiceNumber) {
+      return res.status(400).json({ message: `This proposal was already invoiced as ${proposal.invoiceNumber}.` });
+    }
+    const client = await Client.findById(proposal.client);
+    const totalExclVat = budget(proposal).amount;
+    const vatAmount = client.vatExempt ? 0 : roundCents(totalExclVat * VAT_RATE);
+    const invoice = {
+      client,
+      summary: `Prestaties zoals beschreven in offerte ${proposal.number}`,
+      totalExclVat,
+      vatAmount,
+      totalInclVat: roundCents(totalExclVat + vatAmount),
+      vatRate: VAT_RATE,
+    };
+    const { year, iso, date } = belgianDate();
+    await pdfDetails(invoice, { brand: proposal.brand, date }); // refuses a problem before a number is used
+
+    issued = await nextInvoiceNumber(year);
+    const { number } = issued;
+    const pdf = await renderInvoiceBuffer(await pdfDetails(invoice, { brand: proposal.brand, number, date }));
+    storedDocument = await Document.create({
+      client: client._id,
+      category: 'bill',
+      originalName: `factuur_${number}_${client.name.replace(/[^\w-]+/g, '_')}.pdf`,
+      storedFileName: `invoice-${number}.pdf`,
+      mimeType: 'application/pdf',
+      size: pdf.length,
+      uploadedBy: req.user._id,
+      notes: `Invoice date ${iso}, for proposal ${proposal.number}`,
+      invoiceNumber: number,
+      pdf,
+      totalExclVat,
+      vatAmount,
+      proposal: proposal._id,
+    });
+    proposal.invoiceNumber = number;
+    await proposal.save();
+    res.json({ invoiceNumber: number, document: { _id: storedDocument._id, originalName: storedDocument.originalName } });
+  } catch (err) {
+    // No invoice may stay behind, and an unused last number goes back so the series has no gap
+    if (storedDocument) await Document.deleteOne({ _id: storedDocument._id }).catch(() => {});
+    if (issued) {
+      await Setting.updateOne({ key: issued.key, sequence: issued.sequence }, { $inc: { sequence: -1 } }).catch(() => {});
+    }
+    if (err instanceof onfact.OnFactError) return res.status(400).json({ message: err.message });
+    res.status(500).json({ message: 'Could not create the invoice.', error: err.message });
+  }
+});
+
 // DELETE /api/proposals/:id - not once it created assignments
 router.delete('/:id', async (req, res) => {
   try {
     const proposal = await Proposal.findById(req.params.id);
     if (!proposal) return res.status(404).json({ message: 'Proposal not found.' });
-    if (proposal.createdAssignments.length) {
-      return res.status(400).json({ message: 'This proposal created assignments, so it is kept.' });
+    if (proposal.createdAssignments.length || proposal.invoiceNumber) {
+      return res.status(400).json({ message: 'This proposal created assignments or an invoice, so it is kept.' });
     }
     await proposal.deleteOne();
     res.json({ message: 'Proposal deleted.' });
